@@ -5,7 +5,7 @@ This guide provides detailed instructions for setting up a development environme
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourusername/scriptoris.git
+git clone https://github.com/SilentMalachite/scriptoris.git
 cd scriptoris
 cargo build
 cargo run -- test.md

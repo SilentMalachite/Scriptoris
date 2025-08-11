@@ -1,0 +1,15 @@
+/target
+**/*.rs.bk
+Cargo.lock
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Archived Dioxus-dependent crates
+crates/app_archived/
+crates/bridge_archived/
+
+# Old assets
+assets/

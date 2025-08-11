@@ -1,0 +1,74 @@
+name: ❓ Question
+description: Ask a question about Scriptoris
+title: "[Question] "
+labels: ["question"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question about Scriptoris? We're here to help!
+        
+        Before asking, please check:
+        - [README.md](../README.md) - Basic usage and setup
+        - [CONTRIBUTING.md](../CONTRIBUTING.md) - Development and contribution guide
+        - [Existing issues](../../issues) - Your question might already be answered
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+      placeholder: Please describe your question in detail...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What category does your question fall into?
+      options:
+        - Usage/How-to
+        - Configuration
+        - LSP/Language Server
+        - Development/Contributing
+        - Installation/Setup
+        - Performance
+        - Compatibility
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: |
+        Provide any relevant context that might help us answer your question
+      placeholder: |
+        - What are you trying to achieve?
+        - What have you tried so far?
+        - Any relevant environment details?
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment (if relevant)
+      description: Information about your environment
+      value: |
+        - OS: [e.g. Ubuntu 22.04, macOS 14.0, Windows 11]
+        - Terminal: [e.g. Terminal.app, iTerm2, Windows Terminal]
+        - Scriptoris Version: [e.g. 0.1.0 or commit hash]
+      render: markdown
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and documentation
+          required: true
+        - label: This is a question, not a bug report or feature request
+          required: true

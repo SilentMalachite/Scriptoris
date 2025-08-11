@@ -1,0 +1,28 @@
+[package]
+name = "lsp-plugin"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core dependencies
+scriptoris = { path = "../scriptoris" }
+anyhow = "1.0"
+async-trait = "0.1"
+crossterm = "0.27"
+dirs = "5.0"
+
+# LSP
+lsp-types = "0.94"
+lsp-server = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.32", features = ["full"] }
+tower-lsp = "0.20"
+
+# Utilities
+log = "0.4"
+url = "2.5"
+ropey = "1.6"
+dashmap = "5.5"

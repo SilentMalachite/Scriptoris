@@ -1,0 +1,19 @@
+[package]
+name = "mdcore"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+comrak.workspace = true
+ammonia.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+
+regex = "1.11"
+lazy_static = "1.5"
+
+[dev-dependencies]
+insta = "1.41"

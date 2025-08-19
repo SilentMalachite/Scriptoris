@@ -1,6 +1,6 @@
 # Scriptoris - Terminal Markdown Editor
 
-[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.82+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://github.com/yourusername/scriptoris/workflows/CI/badge.svg)](https://github.com/yourusername/scriptoris/actions)
 
@@ -31,11 +31,12 @@
 - **Plugin Architecture** - Extensible plugin system with async support
 - **Efficient text handling** - Powered by Ropey for large file performance
 
-### 📝 Markdown Support
+### 📝 Markdown & Highlighting
 - **GitHub Flavored Markdown** (GFM) with:
   - Tables, footnotes, strikethrough
   - Task lists and checkboxes
   - Code blocks with syntax highlighting
+- **Syntax highlighting** via syntect, with Markdown syntax prioritized for `.md`
 - **HTML export** with sanitization (mdcore crate)
 - **Live syntax awareness** for better editing experience
 
@@ -49,7 +50,7 @@
 
 ### Installation
 
-**Prerequisites:** Rust 1.70+ and Cargo
+**Prerequisites:** Rust 1.82+ and Cargo
 
 ```bash
 # Clone and build
@@ -112,6 +113,12 @@ scriptoris file1.md file2.md file3.md
 | `Ctrl+]` | Go to definition |
 
 ### Session Management
+### Theming & Settings
+
+| Command | Description |
+|---------|-------------|
+| `:set theme <name>` | Change syntax theme (e.g. `base16-ocean.dark`). Persists to config.
+
 | Command | Description |
 |---------|-------------|
 | `:session save name` | Save current session |
@@ -199,7 +206,7 @@ Configuration file location:
 ## 🐛 Known Issues & Limitations
 
 - Large files (>100k lines) may experience performance degradation
-- Some terminal emulators may not support all Unicode characters perfectly
+- Some terminal emulators may not support all Unicode characters perfectly; Scriptoris adjusts cursor position using Unicode display width for better alignment
 - LSP features require external language servers to be installed
 - No GUI preview mode (terminal-only by design)
 

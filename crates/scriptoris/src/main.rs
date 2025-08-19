@@ -3,6 +3,7 @@ mod command_processor;
 mod config;
 mod editor;
 mod enhanced_ui;
+mod highlight;
 mod file_manager;
 mod status_manager;
 mod ui;

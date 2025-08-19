@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, Mode};
+use crate::highlight::Highlighter;
 
 pub struct EnhancedUI;
 
@@ -103,23 +104,32 @@ impl EnhancedUI {
             f.render_widget(line_number_widget, editor_area[0]);
         }
 
-        // Draw editor content with enhanced highlighting
+        // Draw editor content with syntax highlighting
         let lines = app.editor.get_viewport_lines();
         let (cursor_line, _cursor_col) = app.editor.cursor_position();
-        
-        let content_lines: Vec<Line> = lines.into_iter().enumerate().map(|(i, line)| {
-            let line_str = line.trim_end_matches('\n').to_string();
-            
-            // Highlight current line if enabled
-            if app.config.editor.highlight_current_line && i == cursor_line {
-                Line::from(Span::styled(
-                    format!("{:<width$}", line_str, width = area.width as usize),
-                    Style::default().bg(Color::Rgb(40, 40, 40))
-                ))
-            } else {
-                Line::from(Span::raw(line_str))
+
+        // Initialize a temporary highlighter (later can be held in App state)
+        let theme_name = &app.config.theme.syntax_theme;
+        let highlighter = Highlighter::new(theme_name);
+        let syntax = match app.file_path() {
+            Some(p) => highlighter.find_syntax_for_filename(p.to_string_lossy().as_ref()),
+            None => highlighter.find_syntax_for_filename("text.md"),
+        };
+
+        let mut content_lines = highlighter.highlight_lines_to_ratatui(&lines, syntax);
+
+        // Current line background highlight overlay
+        if app.config.editor.highlight_current_line {
+            if cursor_line < content_lines.len() {
+                let bg = Style::default().bg(Color::Rgb(40, 40, 40));
+                let spans = content_lines[cursor_line]
+                    .spans
+                    .iter()
+                    .map(|s| Span::styled(s.content.clone().into_owned(), s.style.patch(bg)))
+                    .collect::<Vec<_>>();
+                content_lines[cursor_line] = Line::from(spans);
             }
-        }).collect();
+        }
 
         let editor_widget = Paragraph::new(content_lines)
             .style(Style::default().fg(Color::White))
@@ -135,11 +145,21 @@ impl EnhancedUI {
     }
 
     fn draw_cursor(f: &mut Frame, app: &App, area: Rect) {
+        use unicode_width::UnicodeWidthChar;
         let (cursor_line, cursor_col) = app.editor.cursor_position();
-        
+
+        // Compute display column considering fullwidth characters on the line
+        // We recompute width from start to cursor_col for correctness
+        let line_text = {
+            let lines = app.editor.get_viewport_lines();
+            lines.get(cursor_line).cloned().unwrap_or_default()
+        };
+        let logical_prefix: String = line_text.chars().take(cursor_col).collect();
+        let display_col: usize = logical_prefix.chars().map(|c| c.width().unwrap_or(1)).sum();
+
         // Calculate cursor position on screen
-        if cursor_line < area.height as usize && cursor_col < area.width as usize {
-            let cursor_x = area.x + cursor_col as u16;
+        if cursor_line < area.height as usize && display_col < area.width as usize as usize {
+            let cursor_x = area.x + display_col as u16;
             let cursor_y = area.y + cursor_line as u16;
             
             if cursor_x < area.x + area.width && cursor_y < area.y + area.height {

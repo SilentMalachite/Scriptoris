@@ -17,7 +17,7 @@ cargo run -- test.md
 
 #### Required
 
-- **Rust 1.70.0+** - Install via [rustup](https://rustup.rs/)
+- **Rust 1.82.0+** - Install via [rustup](https://rustup.rs/)
 - **Git** - Version control
 - **A terminal emulator** that supports Unicode
 
@@ -44,6 +44,9 @@ cargo --version
 
 # Install useful components
 rustup component add rustfmt clippy
+ 
+# (Optional) add cross-targets for release builds
+rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-msvc
 ```
 
 ### Development Tools

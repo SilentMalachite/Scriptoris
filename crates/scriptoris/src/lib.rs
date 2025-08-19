@@ -5,6 +5,7 @@ pub mod command_processor;
 pub mod config;
 pub mod editor;
 pub mod enhanced_ui;
+pub mod highlight;
 pub mod file_manager;
 pub mod status_manager;
 pub mod ui;

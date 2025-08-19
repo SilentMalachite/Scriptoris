@@ -3,6 +3,7 @@ use crate::app::{BufferManager, WindowManager};
 use std::path::PathBuf;
 
 use crate::editor::Editor;
+use crate::config::Config;
 use crate::file_manager::FileManager;
 
 pub struct CommandProcessor;
@@ -19,6 +20,7 @@ impl CommandProcessor {
         file_manager: &mut FileManager,
         buffer_manager: &mut BufferManager,
         window_manager: &mut WindowManager,
+        config: &mut Config,
         should_quit: &mut bool
     ) -> Result<String> {
         let cmd = command.trim();
@@ -85,9 +87,12 @@ impl CommandProcessor {
                 // :e filename - edit file
                 if parts.len() > 1 {
                     let path = PathBuf::from(parts[1]);
+                    let path_for_fm = path.clone();
                     buffer_manager.open_file(path)?;
                     let buffer = buffer_manager.get_current_mut();
                     *editor = buffer.content.clone();
+                    // Keep FileManager in sync so :w works after :e
+                    file_manager.set_current_file(path_for_fm);
                     Ok("File opened in new buffer".to_string())
                 } else {
                     Err(anyhow::anyhow!("E471: Argument required"))
@@ -159,6 +164,18 @@ impl CommandProcessor {
             "mksession" | "source" | "sessions" | "delsession" => {
                 Ok("Session management commands not yet implemented".to_string())
             }
+            "set" => {
+                // :set theme <name>
+                if parts.len() == 3 && parts[1] == "theme" {
+                    let theme = parts[2];
+                    config.theme.syntax_theme = theme.to_string();
+                    // Persist asynchronously
+                    let _ = config.save().await;
+                    Ok(format!("Theme set to '{}'", theme))
+                } else {
+                    Err(anyhow::anyhow!("Usage: :set theme <theme-name>"))
+                }
+            }
             _ => {
                 Err(anyhow::anyhow!("E492: Not an editor command: {}", parts[0]))
             }
@@ -189,7 +206,8 @@ mod tests {
         // Test quit with unmodified editor
         let mut buffer_manager = BufferManager::new();
         let mut window_manager = WindowManager::new(0);
-        let result = cp.execute_command("q", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut should_quit).await;
+        let mut config = Config::default();
+        let result = cp.execute_command("q", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut config, &mut should_quit).await;
         assert!(result.is_ok());
         assert!(should_quit);
 
@@ -200,7 +218,8 @@ mod tests {
         // Test quit with modified editor
         let mut buffer_manager = BufferManager::new();
         let mut window_manager = WindowManager::new(0);
-        let result = cp.execute_command("q", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut should_quit).await;
+        let mut config = Config::default();
+        let result = cp.execute_command("q", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut config, &mut should_quit).await;
         assert!(result.is_ok());
         assert!(!should_quit); // Should not quit due to modifications
         assert!(result.unwrap().contains("No write since last change"));
@@ -208,7 +227,8 @@ mod tests {
         // Test force quit
         let mut buffer_manager = BufferManager::new();
         let mut window_manager = WindowManager::new(0);
-        let result = cp.execute_command("q!", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut should_quit).await;
+        let mut config = Config::default();
+        let result = cp.execute_command("q!", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut config, &mut should_quit).await;
         assert!(result.is_ok());
         assert!(should_quit); // Should force quit
     }
@@ -224,7 +244,8 @@ mod tests {
         
         let mut buffer_manager = BufferManager::new();
         let mut window_manager = WindowManager::new(0);
-        let result = cp.execute_command("search World", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut should_quit).await;
+        let mut config = Config::default();
+        let result = cp.execute_command("search World", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut config, &mut should_quit).await;
         assert!(result.is_ok());
         assert!(result.unwrap().contains("Searching for: World"));
         
@@ -248,7 +269,8 @@ mod tests {
         let cmd = format!("e {}", temp_file.path().display());
         let mut buffer_manager = BufferManager::new();
         let mut window_manager = WindowManager::new(0);
-        let result = cp.execute_command(&cmd, &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut should_quit).await;
+        let mut config = Config::default();
+        let result = cp.execute_command(&cmd, &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut config, &mut should_quit).await;
         assert!(result.is_ok());
         assert_eq!(editor.get_content(), "Initial content\n");
 
@@ -256,7 +278,8 @@ mod tests {
         editor.insert_char('!');
         let mut buffer_manager = BufferManager::new();
         let mut window_manager = WindowManager::new(0);
-        let result = cp.execute_command("w", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut should_quit).await;
+        let mut config = Config::default();
+        let result = cp.execute_command("w", &mut editor, &mut file_manager, &mut buffer_manager, &mut window_manager, &mut config, &mut should_quit).await;
         assert!(result.is_ok());
         assert!(!editor.is_modified());
     }

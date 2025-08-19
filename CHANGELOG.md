@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release preparation
 - Complete project documentation
+- Syntax highlighting via syntect in both Standard and Enhanced UIs
+- Markdown syntax prioritization for `.md` files
+- `:set theme <name>` command to persist syntax theme
+- Unicode display-width-aware cursor positioning for better Japanese support
+- Linux cross-targets in toolchain and Rust 1.82 MSRV
 
 ## [0.1.0] - 2024-01-XX (Upcoming)
 

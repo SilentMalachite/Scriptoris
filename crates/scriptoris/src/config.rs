@@ -65,7 +65,7 @@ impl Default for Config {
                 wrap_lines: false,
             },
             keybindings: KeybindingStyle::Vim,
-            ui_mode: UIMode::Standard,
+            ui_mode: UIMode::Enhanced,
         }
     }
 }

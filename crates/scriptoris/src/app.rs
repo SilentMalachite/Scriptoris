@@ -285,10 +285,9 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub fn new() -> Result<Self> {
-        let session_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?
-            .join("scriptoris")
-            .join("sessions");
+        let project_dirs = directories::ProjectDirs::from("com", "scriptoris", "scriptoris")
+            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+        let session_dir = project_dirs.config_dir().join("sessions");
         
         std::fs::create_dir_all(&session_dir)?;
         
@@ -950,6 +949,7 @@ impl App {
                     &mut self.file_manager,
                     &mut self.buffer_manager,
                     &mut self.window_manager,
+                    &mut self.config,
                     &mut self.ui_state.should_quit
                 ).await {
                     Ok(message) => {
@@ -1183,6 +1183,7 @@ mod tests {
             &mut app.file_manager,
             &mut app.buffer_manager,
             &mut app.window_manager,
+            &mut app.config,
             &mut app.ui_state.should_quit
         ).await;
         
@@ -1205,6 +1206,7 @@ mod tests {
             &mut app.file_manager,
             &mut app.buffer_manager,
             &mut app.window_manager,
+            &mut app.config,
             &mut app.ui_state.should_quit
         ).await;
         

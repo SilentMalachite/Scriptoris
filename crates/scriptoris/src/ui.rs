@@ -8,6 +8,7 @@ use ratatui::{
 };
 
 use crate::app::{App, Mode};
+use crate::highlight::Highlighter;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -37,7 +38,7 @@ fn draw_windows(f: &mut Frame, app: &mut App, area: Rect, window: &Window) {
             if let Ok(()) = app.buffer_manager.switch_to_buffer(*buffer_id) {
                 let buffer = app.buffer_manager.get_current();
                 let is_current = window.id == app.window_manager.current_window_id;
-                draw_buffer(f, buffer, area, is_current);
+                draw_buffer(f, app, buffer, area, is_current);
             }
         }
         Split::Horizontal { top, bottom, ratio } => {
@@ -81,7 +82,7 @@ fn draw_windows(f: &mut Frame, app: &mut App, area: Rect, window: &Window) {
     }
 }
 
-fn draw_buffer(f: &mut Frame, buffer: &Buffer, area: Rect, is_current: bool) {
+fn draw_buffer(f: &mut Frame, app: &App, buffer: &Buffer, area: Rect, is_current: bool) {
     let border_style = if is_current {
         Style::default().fg(Color::Yellow)
     } else {
@@ -125,23 +126,31 @@ fn draw_buffer(f: &mut Frame, buffer: &Buffer, area: Rect, is_current: bool) {
     
     f.render_widget(line_numbers_widget, chunks[0]);
     
-    // Draw content
-    let content = viewport_lines.join("\n");
-    let content_widget = Paragraph::new(content)
-        .style(Style::default().fg(Color::White));
-    
+    // Draw content with basic syntax highlighting as well
+    let theme_name = &app.config.theme.syntax_theme;
+    let highlighter = Highlighter::new(theme_name);
+    let syntax = match buffer.file_path.as_ref().and_then(|p| p.to_str()) {
+        Some(name) => highlighter.find_syntax_for_filename(name),
+        None => highlighter.find_syntax_for_filename("text.md"),
+    };
+    let content_lines = highlighter.highlight_lines_to_ratatui(&viewport_lines, syntax);
+    let content_widget = Paragraph::new(content_lines).style(Style::default().fg(Color::White));
     f.render_widget(content_widget, chunks[1]);
     
     // Draw cursor if this is the current window
     if is_current {
+        use unicode_width::UnicodeWidthChar;
         let (cursor_line, cursor_col) = buffer.content.cursor_position();
         let viewport_offset = buffer.content.get_viewport_offset();
-        
+
         if cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
             let screen_line = cursor_line - viewport_offset;
-            let x = chunks[1].x + cursor_col as u16;
+            let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
+            let logical_prefix: String = line_text.chars().take(cursor_col).collect();
+            let display_col: usize = logical_prefix.chars().map(|c| c.width().unwrap_or(1)).sum();
+            let x = chunks[1].x + display_col as u16;
             let y = chunks[1].y + screen_line as u16;
-            
+
             if x < chunks[1].x + chunks[1].width && y < chunks[1].y + chunks[1].height {
                 f.set_cursor(x, y);
             }

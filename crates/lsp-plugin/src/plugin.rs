@@ -29,10 +29,9 @@ impl ScriptorisLspPlugin {
 
     pub async fn initialize(&self) -> Result<()> {
         // Load config if exists
-        let config_path = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?
-            .join("scriptoris")
-            .join("lsp.json");
+        let project_dirs = directories::ProjectDirs::from("com", "scriptoris", "scriptoris")
+            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+        let config_path = project_dirs.config_dir().join("lsp.json");
         
         if config_path.exists() {
             self.lsp.load_config(config_path).await?;

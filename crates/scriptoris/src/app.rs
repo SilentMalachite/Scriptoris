@@ -716,8 +716,12 @@ impl App {
             self.macro_keys.push(key.clone());
         }
         
-        // Clear last_key if it's not 'd' and we're not pressing 'd'  
-        if key.code != KeyCode::Char('d') && key.code != KeyCode::Char('q') && self.last_key.is_some() {
+        // Clear last_key if it's not a chord continuation key
+        let is_chord_key = match key.code {
+            KeyCode::Char('d') | KeyCode::Char('q') | KeyCode::Char('y') => true,
+            _ => false,
+        };
+        if !is_chord_key && self.last_key.is_some() {
             self.last_key = None;
         }
         
@@ -809,6 +813,9 @@ impl App {
             KeyCode::Char('x') => self.editor.delete_char_forward(),
             KeyCode::Char('d') => self.handle_delete_command(),
             
+            // Yank
+            KeyCode::Char('y') => self.handle_yank_command(),
+
             // Paste
             KeyCode::Char('p') => {
                 self.editor.paste();
@@ -861,6 +868,17 @@ impl App {
             self.last_key = None;
         } else {
             self.last_key = Some('d');
+        }
+    }
+
+    fn handle_yank_command(&mut self) {
+        // Vim yy command: yank line (second y press)
+        if self.last_key == Some('y') {
+            self.editor.yank_line();
+            self.ui_state.set_success_message("Line yanked".to_string());
+            self.last_key = None;
+        } else {
+            self.last_key = Some('y');
         }
     }
     
@@ -1416,5 +1434,29 @@ Line 3");
         // The pasted line should be inserted at current position
         let content = app.editor.get_content();
         assert!(content.contains("Line 1")); // Original line 1 should still be in content
+    }
+
+    #[tokio::test]
+    async fn test_yy_and_p_command() {
+        let mut app = App::new().await.unwrap();
+        app.editor.set_content("Line 1\nLine 2".to_string());
+
+        // Yank line 1
+        let result = app.handle_normal_mode_key(create_key_event(KeyCode::Char('y')));
+        assert!(result.is_ok());
+        let result = app.handle_normal_mode_key(create_key_event(KeyCode::Char('y')));
+        assert!(result.is_ok());
+
+        assert_eq!(app.editor.get_clipboard_content(), "Line 1\n");
+        assert!(app.status_message().contains("Line yanked"));
+
+        // Move to line 2 and paste below it
+        app.editor.move_cursor_down();
+        let result = app.handle_normal_mode_key(create_key_event(KeyCode::Char('p')));
+        assert!(result.is_ok());
+
+        let expected_content = "Line 1\nLine 2\nLine 1\n";
+        assert_eq!(app.editor.get_content(), expected_content);
+        assert_eq!(app.editor.cursor_position().0, 2); // Cursor should be on the new pasted line
     }
 }

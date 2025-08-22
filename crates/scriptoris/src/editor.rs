@@ -183,28 +183,107 @@ impl Editor {
     }
 
     pub fn delete_line(&mut self) {
+        if self.rope.len_lines() == 0 || self.cursor_line >= self.rope.len_lines() {
+            return;
+        }
+
         if let Some(line) = self.rope.get_line(self.cursor_line) {
             self.clipboard = line.to_string();
-            let start_idx = self.rope.line_to_char(self.cursor_line);
+            let mut start_idx = self.rope.line_to_char(self.cursor_line);
             let end_idx = if self.cursor_line + 1 < self.rope.len_lines() {
                 self.rope.line_to_char(self.cursor_line + 1)
             } else {
+                // This is the last line. If there's a preceding newline, remove it too.
+                if start_idx > 0 {
+                    if self.rope.char(start_idx - 1) == '\n' {
+                        start_idx -= 1;
+                    }
+                }
                 self.rope.len_chars()
             };
-            self.rope.remove(start_idx..end_idx);
+
+            // Ensure we don't try to remove an empty range if the file is empty.
+            if start_idx < end_idx {
+                self.rope.remove(start_idx..end_idx);
+            } else if self.rope.len_chars() > 0 && self.cursor_line == 0 {
+                // Handle deleting the only line in the file
+                self.rope.remove(0..self.rope.len_chars());
+            }
+
             self.cursor_col = 0;
+            // Adjust cursor line if we deleted the last line
+            if self.cursor_line >= self.rope.len_lines() && self.rope.len_lines() > 0 {
+                self.cursor_line = self.rope.len_lines() - 1;
+            }
             self.modified = true;
             self.save_state();
         }
     }
 
-    pub fn paste(&mut self) {
-        if !self.clipboard.is_empty() {
-            let char_idx = self.line_col_to_char_idx(self.cursor_line, self.cursor_col);
-            self.rope.insert(char_idx, &self.clipboard);
-            self.modified = true;
-            self.save_state();
+    pub fn get_clipboard_content(&self) -> &str {
+        &self.clipboard
+    }
+
+    pub fn yank_line(&mut self) {
+        if self.cursor_line >= self.rope.len_lines() {
+            return;
         }
+        let start_idx = self.rope.line_to_char(self.cursor_line);
+        let end_idx = if self.cursor_line + 1 < self.rope.len_lines() {
+            self.rope.line_to_char(self.cursor_line + 1)
+        } else {
+            self.rope.len_chars()
+        };
+
+        if let Some(slice) = self.rope.get_slice(start_idx..end_idx) {
+            self.clipboard = slice.to_string();
+            // Ensure line-wise yanks always end in a newline for consistent pasting behavior.
+            if !self.clipboard.ends_with('\n') {
+                self.clipboard.push('\n');
+            }
+        }
+    }
+
+    pub fn paste(&mut self) {
+        if self.clipboard.is_empty() {
+            return;
+        }
+
+        if self.clipboard.ends_with('\n') {
+            // Line-wise paste. Insert on the line *after* the cursor.
+            let target_line = self.cursor_line + 1;
+
+            if target_line >= self.rope.len_lines() {
+                // If we are at the end of the file, we need to add a newline before pasting
+                // if the file doesn't already end with one.
+                if self.rope.len_chars() > 0 && self.rope.char(self.rope.len_chars() - 1) != '\n' {
+                    self.rope.insert_char(self.rope.len_chars(), '\n');
+                }
+                self.rope.insert(self.rope.len_chars(), &self.clipboard);
+            } else {
+                let char_idx = self.rope.line_to_char(target_line);
+                self.rope.insert(char_idx, &self.clipboard);
+            }
+            // Move cursor to the first non-whitespace char of the pasted content.
+            self.cursor_line = target_line.min(self.rope.len_lines().saturating_sub(1));
+            if self.cursor_line < self.rope.len_lines() {
+                let pasted_line = self.rope.line(self.cursor_line);
+                self.cursor_col = pasted_line.to_string().chars().take_while(|c| c.is_whitespace()).count();
+                self.adjust_cursor_col();
+            }
+
+        } else {
+            // Character-wise paste. Insert *after* the cursor.
+            let mut char_idx = self.line_col_to_char_idx(self.cursor_line, self.cursor_col);
+            if self.rope.len_chars() > 0 && self.cursor_col < self.rope.line(self.cursor_line).len_chars() {
+                 char_idx += 1;
+            }
+            self.rope.insert(char_idx, &self.clipboard);
+            // Move cursor to the start of the pasted text
+            self.cursor_col = self.char_idx_to_line_col(char_idx).1;
+        }
+        self.modified = true;
+        self.save_state();
     }
 
     pub fn move_cursor_up(&mut self) {
@@ -552,7 +631,7 @@ mod tests {
         
         // Test paste
         editor.paste();
-        assert_eq!(editor.get_content(), "Line 1\nLine 2\nLine 3");
+        assert_eq!(editor.get_content(), "Line 1\nLine 3\nLine 2\n");
     }
 
     #[test]
@@ -640,7 +719,7 @@ mod tests {
         // Delete the second line
         editor.cursor_line = 1;
         editor.delete_line();
-        assert_eq!(editor.get_content(), "Line 1\n");
+        assert_eq!(editor.get_content(), "Line 1");
         
         // Undo should restore the line
         assert!(editor.undo());
@@ -782,5 +861,71 @@ mod tests {
         editor.insert_char('!');
         assert!(editor.undo());
         assert_eq!(editor.get_content(), "New content");
+    }
+
+    #[test]
+    fn test_delete_last_line() {
+        let mut editor = Editor::new();
+        editor.set_content("Line 1\nLine 2".to_string());
+        editor.cursor_line = 1; // Move to last line
+
+        editor.delete_line();
+        // Deleting last line should also remove the preceding newline.
+        assert_eq!(editor.get_content(), "Line 1");
+        assert_eq!(editor.line_count(), 1);
+
+        // Check clipboard
+        assert!(editor.clipboard.starts_with("Line 2"));
+    }
+
+    #[test]
+    fn test_delete_only_line() {
+        let mut editor = Editor::new();
+        editor.set_content("Only line".to_string());
+
+        editor.delete_line();
+        // Deleting the only line should result in an empty rope, which is one empty line.
+        assert_eq!(editor.get_content(), "");
+        assert_eq!(editor.line_count(), 1);
+        assert_eq!(editor.rope.len_chars(), 0);
+
+        // Check clipboard
+        assert!(editor.clipboard.starts_with("Only line"));
+    }
+
+    #[test]
+    fn test_yank_and_paste_line() {
+        let mut editor = Editor::new();
+        editor.set_content("Line 1\nLine 2\nLine 3".to_string());
+
+        // Yank Line 2
+        editor.cursor_line = 1;
+        editor.yank_line();
+        assert_eq!(editor.clipboard, "Line 2\n");
+
+        // Paste it below Line 3
+        editor.cursor_line = 2;
+        editor.paste();
+
+        let expected_content = "Line 1\nLine 2\nLine 3\nLine 2\n";
+        assert_eq!(editor.get_content(), expected_content);
+        assert_eq!(editor.cursor_line, 3); // Cursor should be on the new line
+    }
+
+    #[test]
+    fn test_yank_last_line_and_paste() {
+        let mut editor = Editor::new();
+        editor.set_content("Line 1\nLine 2".to_string());
+
+        // Yank last line (Line 2)
+        editor.cursor_line = 1;
+        editor.yank_line();
+        assert_eq!(editor.clipboard, "Line 2\n");
+
+        // Paste it at the end (cursor is still on line 1)
+        editor.paste();
+        let expected_content = "Line 1\nLine 2\nLine 2\n";
+        assert_eq!(editor.get_content(), expected_content);
+        assert_eq!(editor.cursor_line, 2);
     }
 }

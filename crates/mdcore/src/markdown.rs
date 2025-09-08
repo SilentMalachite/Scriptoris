@@ -44,20 +44,28 @@ fn create_comrak_options() -> ComrakOptions<'static> {
 }
 
 pub fn patch_math_blocks(html: &str) -> String {
+    const BLOCK_DELIM: &str = "__MATH_BLOCK_DELIM__";
+
     // Process block math first ($$...$$)
     let result = MATH_BLOCK
         .replace_all(
             html,
-            r#"<div class="math-block" data-math="$1">$$1$</div>"#,
+            format!(
+                r#"<div class="math-block" data-math="$1">{0}$1{0}</div>"#,
+                BLOCK_DELIM
+            ),
         );
 
     // Process inline math ($...$)
-    MATH_INLINE
+    let result = MATH_INLINE
         .replace_all(
             &result,
             r#"<span class="math-inline" data-math="$1">$$$1$$</span>"#,
         )
-        .into_owned()
+        .into_owned();
+
+    // Restore the block delimiters
+    result.replace(BLOCK_DELIM, "$$")
 }
 
 pub fn patch_mermaid_blocks(html: &str) -> String {
@@ -107,5 +115,13 @@ mod tests {
         let md = "```mermaid\ngraph LR\n  A --> B\n```";
         let html = to_html(md);
         assert!(html.contains(r#"class="mermaid""#));
+    }
+
+    #[test]
+    fn test_math_block_is_not_treated_as_inline() {
+        let md = "$$a$$";
+        let html = to_html(md);
+        assert!(html.contains(r#"class="math-block""#));
+        assert!(!html.contains(r#"class="math-inline""#));
     }
 }

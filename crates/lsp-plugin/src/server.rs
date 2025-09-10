@@ -253,6 +253,7 @@ impl LanguageServer for LspServer {
     }
 }
 
+#[allow(dead_code)]
 pub async fn run_server() -> Result<()> {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();

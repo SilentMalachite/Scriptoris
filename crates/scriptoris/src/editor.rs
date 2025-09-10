@@ -19,6 +19,7 @@ pub struct Editor {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 struct EditorState {
     content: String,
     cursor_line: usize,

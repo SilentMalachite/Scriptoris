@@ -20,14 +20,11 @@
 - **Unicode support** - Full Japanese and international character support
 
 ### 🔧 Advanced Features
-- **LSP Integration** - Language Server Protocol support for:
-  - **Rust** (rust-analyzer)
-  - **TypeScript/JavaScript** (typescript-language-server)
-  - **Python** (pylsp)
-  - Code completion (`Ctrl+Space`)
-  - Hover documentation (`Ctrl+K`)
-  - Go to definition (`Ctrl+]`)
-  - Real-time diagnostics
+- **LSP Integration (Prototype)** - Basic demo server with sample responses:
+  - Sample code completion (`Ctrl+Space`)
+  - Sample hover documentation (`Ctrl+K`)
+  - Diagnostics currently empty (no real validation)
+  - Go to definition and references are not implemented yet
 - **Plugin Architecture** - Extensible plugin system with async support
 - **Efficient text handling** - Powered by Ropey for large file performance
 
@@ -108,9 +105,10 @@ scriptoris file1.md file2.md file3.md
 ### LSP Features
 | Key | Action |
 |-----|--------|
-| `Ctrl+Space` | Trigger completion |
-| `Ctrl+K` | Show hover information |
-| `Ctrl+]` | Go to definition |
+| `Ctrl+Space` | Trigger sample completion (prototype) |
+| `Ctrl+K` | Show sample hover information (prototype) |
+
+Note: Go to definition and other LSP features are not implemented yet in the current prototype.
 
 ### Session Management
 ### Theming & Settings

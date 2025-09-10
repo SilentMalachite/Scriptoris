@@ -113,7 +113,7 @@ fn draw_buffer(f: &mut Frame, app: &App, buffer: &Buffer, area: Rect, is_current
         .split(inner);
     
     // Draw line numbers
-    let line_count = buffer.content.line_count();
+    let _line_count = buffer.content.line_count();
     let viewport_lines = buffer.content.get_viewport_lines();
     let start_line = buffer.content.get_viewport_offset();
     

@@ -55,7 +55,9 @@ jobs:
       run: cargo build --verbose --all-features
 
     - name: Run tests
-      run: cargo test --verbose --all-features
+      run: cargo test --verbose --all-features --jobs 4
+      env:
+        RUST_TEST_THREADS: 4
 
     - name: Test documentation
       run: cargo doc --no-deps --all-features
@@ -66,7 +68,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.70.0  # MSRV
+      uses: dtolnay/rust-toolchain@1.82.0  # MSRV
     - name: Check MSRV
       run: cargo check --all-features
 

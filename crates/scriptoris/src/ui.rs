@@ -8,7 +8,6 @@ use ratatui::{
 };
 
 use crate::app::{App, Mode};
-use crate::highlight::Highlighter;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -34,11 +33,13 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 fn draw_windows(f: &mut Frame, app: &mut App, area: Rect, window: &Window) {
     match &window.split {
         Split::Leaf { buffer_id } => {
-            // Draw single buffer in this window
-            if let Ok(()) = app.buffer_manager.switch_to_buffer(*buffer_id) {
-                let buffer = app.buffer_manager.get_current();
-                let is_current = window.id == app.window_manager.current_window_id;
-                draw_buffer(f, app, buffer, area, is_current);
+            // Draw single buffer in this window  
+            let current_window_id = app.window_manager.current_window_id;
+            let is_current = window.id == current_window_id;
+            
+            // Find buffer index to avoid borrowing conflicts
+            if let Some(buffer_index) = app.buffer_manager.buffers.iter().position(|b| b.id == *buffer_id) {
+                draw_buffer_by_index(f, app, buffer_index, area, is_current);
             }
         }
         Split::Horizontal { top, bottom, ratio } => {
@@ -51,13 +52,6 @@ fn draw_windows(f: &mut Frame, app: &mut App, area: Rect, window: &Window) {
                 .split(area);
             
             draw_windows(f, app, chunks[0], top);
-            
-            // Draw horizontal separator
-            let separator = Block::default()
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(Color::DarkGray));
-            f.render_widget(separator, chunks[1]);
-            
             draw_windows(f, app, chunks[1], bottom);
         }
         Split::Vertical { left, right, ratio } => {
@@ -70,19 +64,164 @@ fn draw_windows(f: &mut Frame, app: &mut App, area: Rect, window: &Window) {
                 .split(area);
             
             draw_windows(f, app, chunks[0], left);
-            
-            // Draw vertical separator
-            let separator = Block::default()
-                .borders(Borders::LEFT)
-                .border_style(Style::default().fg(Color::DarkGray));
-            f.render_widget(separator, chunks[1]);
-            
             draw_windows(f, app, chunks[1], right);
         }
     }
 }
 
-fn draw_buffer(f: &mut Frame, app: &App, buffer: &Buffer, area: Rect, is_current: bool) {
+fn draw_buffer_by_index(f: &mut Frame, app: &mut App, buffer_index: usize, area: Rect, is_current: bool) {
+    let buffer = &app.buffer_manager.buffers[buffer_index];
+    
+    let border_style = if is_current {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(
+            buffer.file_path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("[No Name]")
+        );
+    
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    
+    // Split for line numbers and content
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(5),  // Line numbers
+            Constraint::Min(0),     // Content
+        ])
+        .split(inner);
+    
+    // Draw line numbers
+    let viewport_lines = buffer.content.get_viewport_lines();
+    let start_line = buffer.content.get_viewport_offset();
+    let line_numbers: Vec<String> = (0..viewport_lines.len())
+        .map(|i| format!("{:4}", start_line + i + 1))
+        .collect();
+    
+    let line_numbers_widget = Paragraph::new(line_numbers.join("\n"))
+        .style(Style::default().fg(Color::DarkGray));
+    
+    f.render_widget(line_numbers_widget, chunks[0]);
+    
+    // Get file path for syntax highlighting
+    let filename = buffer.file_path.as_ref().and_then(|p| p.to_str()).unwrap_or("text.md").to_string();
+    let theme_name = app.config.theme.syntax_theme.clone();
+    
+    // Use a temporary highlighter to avoid borrowing conflicts
+    let highlighter = crate::highlight::Highlighter::new(&theme_name);
+    let syntax = highlighter.find_syntax_for_filename(&filename);
+    let content_lines = highlighter.highlight_lines_to_ratatui(&viewport_lines, syntax);
+    let content_widget = Paragraph::new(content_lines).style(Style::default().fg(Color::White));
+    f.render_widget(content_widget, chunks[1]);
+    
+    // Draw cursor if this is the current window
+    if is_current {
+        use unicode_width::UnicodeWidthChar;
+        let (cursor_line, cursor_col) = buffer.content.cursor_position();
+        let viewport_offset = buffer.content.get_viewport_offset();
+
+        if cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
+            let screen_line = cursor_line - viewport_offset;
+            let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
+            let logical_prefix: String = line_text.chars().take(cursor_col).collect();
+            let display_col: usize = logical_prefix.chars().map(|c| c.width().unwrap_or(1)).sum();
+            let x = chunks[1].x + display_col as u16;
+            let y = chunks[1].y + screen_line as u16;
+
+            if x < chunks[1].x + chunks[1].width && y < chunks[1].y + chunks[1].height {
+                f.set_cursor(x, y);
+            }
+        }
+    }
+}
+
+fn draw_buffer_safe(f: &mut Frame, app: &mut App, buffer: &Buffer, area: Rect, is_current: bool) {
+    // Clone the necessary data to avoid borrowing conflicts
+    let _buffer_id = buffer.id;
+    let file_path = buffer.file_path.clone();
+    let viewport_lines = buffer.content.get_viewport_lines();
+    let viewport_offset = buffer.content.get_viewport_offset();
+    let cursor_position = buffer.content.cursor_position();
+    
+    let border_style = if is_current {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(
+            file_path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("[No Name]")
+        );
+    
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    
+    // Split for line numbers and content
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(5),  // Line numbers
+            Constraint::Min(0),     // Content
+        ])
+        .split(inner);
+    
+    // Draw line numbers
+    let start_line = viewport_offset;
+    let line_numbers: Vec<String> = (0..viewport_lines.len())
+        .map(|i| format!("{:4}", start_line + i + 1))
+        .collect();
+    
+    let line_numbers_widget = Paragraph::new(line_numbers.join("\n"))
+        .style(Style::default().fg(Color::DarkGray));
+    
+    f.render_widget(line_numbers_widget, chunks[0]);
+    
+    // Get file path for syntax highlighting
+    let filename = file_path.as_ref().and_then(|p| p.to_str()).unwrap_or("text.md");
+    let highlighter = app.get_highlighter();
+    let syntax = highlighter.find_syntax_for_filename(filename);
+    let content_lines = highlighter.highlight_lines_to_ratatui(&viewport_lines, syntax);
+    let content_widget = Paragraph::new(content_lines).style(Style::default().fg(Color::White));
+    f.render_widget(content_widget, chunks[1]);
+    
+    // Draw cursor if this is the current window
+    if is_current {
+        use unicode_width::UnicodeWidthChar;
+        let (cursor_line, cursor_col) = cursor_position;
+
+        if cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
+            let screen_line = cursor_line - viewport_offset;
+            let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
+            let logical_prefix: String = line_text.chars().take(cursor_col).collect();
+            let display_col: usize = logical_prefix.chars().map(|c| c.width().unwrap_or(1)).sum();
+            let x = chunks[1].x + display_col as u16;
+            let y = chunks[1].y + screen_line as u16;
+
+            if x < chunks[1].x + chunks[1].width && y < chunks[1].y + chunks[1].height {
+                f.set_cursor(x, y);
+            }
+        }
+    }
+}
+
+fn draw_buffer(f: &mut Frame, app: &mut App, buffer: &Buffer, area: Rect, is_current: bool) {
     let border_style = if is_current {
         Style::default().fg(Color::Yellow)
     } else {
@@ -127,8 +266,7 @@ fn draw_buffer(f: &mut Frame, app: &App, buffer: &Buffer, area: Rect, is_current
     f.render_widget(line_numbers_widget, chunks[0]);
     
     // Draw content with basic syntax highlighting as well
-    let theme_name = &app.config.theme.syntax_theme;
-    let highlighter = Highlighter::new(theme_name);
+    let highlighter = app.get_highlighter();
     let syntax = match buffer.file_path.as_ref().and_then(|p| p.to_str()) {
         Some(name) => highlighter.find_syntax_for_filename(name),
         None => highlighter.find_syntax_for_filename("text.md"),
@@ -194,7 +332,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     };
 
     // Update viewport height
-    app.editor.set_viewport_height(area.height as usize);
+    app.get_current_editor_mut().set_viewport_height(area.height as usize);
 
     // Draw line numbers if enabled
     if app.config.editor.line_numbers {
@@ -202,8 +340,8 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     }
 
     // Draw editor content
-    let lines = app.editor.get_viewport_lines();
-    let (cursor_line, cursor_col) = app.editor.cursor_position();
+    let lines = app.get_current_editor().get_viewport_lines();
+    let (cursor_line, cursor_col) = app.get_current_editor().cursor_position();
     
     let mut text_lines = Vec::new();
     for (i, line) in lines.iter().enumerate() {
@@ -232,7 +370,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
 }
 
 fn draw_line_numbers(f: &mut Frame, app: &App, area: Rect) {
-    let lines = app.editor.get_viewport_lines();
+    let lines = app.get_current_editor().get_viewport_lines();
     let mut line_numbers = Vec::new();
     
     for i in 0..lines.len() {

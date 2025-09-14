@@ -8,6 +8,7 @@ pub struct Highlighter {
     syntax_set: SyntaxSet,
     theme_set: ThemeSet,
     theme: Theme,
+    theme_name: String,
 }
 
 impl Highlighter {
@@ -27,13 +28,19 @@ impl Highlighter {
             syntax_set,
             theme_set,
             theme,
+            theme_name: theme_name.to_string(),
         }
     }
 
     pub fn set_theme(&mut self, theme_name: &str) {
         if let Some(t) = self.theme_set.themes.get(theme_name) {
             self.theme = t.clone();
+            self.theme_name = theme_name.to_string();
         }
+    }
+
+    pub fn theme_name(&self) -> &str {
+        &self.theme_name
     }
 
     pub fn find_syntax_for_filename<'a>(&'a self, filename: &str) -> &'a SyntaxReference {

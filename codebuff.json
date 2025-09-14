@@ -1,0 +1,19 @@
+{
+  "description": "Configuration for Scriptoris - Terminal Markdown Editor built with Rust + Ratatui",
+  "startupProcesses": [],
+  "fileChangeHooks": [
+    {
+      "name": "check",
+      "command": "cargo check",
+      "filePattern": "**/*.rs",
+      "enabled": true
+    },
+    {
+      "name": "test",
+      "command": "cargo test",
+      "filePattern": "**/*.rs",
+      "enabled": true
+    }
+  ],
+  "maxAgentSteps": 25
+}

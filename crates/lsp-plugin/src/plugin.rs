@@ -179,7 +179,7 @@ impl scriptoris::app::Plugin for ScriptorisLspPlugin {
         match key.code {
             // Ctrl+Space for completion
             KeyCode::Char(' ') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let (line, col) = app.editor.cursor_position();
+                let (line, col) = app.get_current_editor().cursor_position();
                 let plugin = self.clone();
                 tokio::spawn(async move {
                     let _ = plugin.get_completions_at_cursor(line as u32, col as u32).await;
@@ -188,7 +188,7 @@ impl scriptoris::app::Plugin for ScriptorisLspPlugin {
             }
             // Ctrl+K for hover
             KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let (line, col) = app.editor.cursor_position();
+                let (line, col) = app.get_current_editor().cursor_position();
                 let plugin = self.clone();
                 tokio::spawn(async move {
                     if let Ok(Some(hover)) = plugin.get_hover_at_cursor(line as u32, col as u32).await {
@@ -200,7 +200,7 @@ impl scriptoris::app::Plugin for ScriptorisLspPlugin {
             }
             // Ctrl+] for goto definition
             KeyCode::Char(']') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let (line, col) = app.editor.cursor_position();
+                let (line, col) = app.get_current_editor().cursor_position();
                 let plugin = self.clone();
                 tokio::spawn(async move {
                     if let Ok(Some(location)) = plugin.goto_definition_at_cursor(line as u32, col as u32).await {
@@ -273,7 +273,7 @@ impl scriptoris::app::Plugin for ScriptorisLspPlugin {
 
     fn on_save(&mut self, app: &mut scriptoris::app::App, path: &std::path::Path) -> Result<()> {
         // Update LSP when file is saved
-        let content = app.editor.get_content();
+        let content = app.get_current_editor().get_content();
         let path = path.to_path_buf();
         let plugin = self.clone();
         tokio::spawn(async move {

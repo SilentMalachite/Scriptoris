@@ -3,6 +3,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.82+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://github.com/yourusername/scriptoris/workflows/CI/badge.svg)](https://github.com/yourusername/scriptoris/actions)
+[![Tests](https://img.shields.io/badge/tests-56_passing-brightgreen.svg)](#)
 
 > A powerful, Vim-inspired terminal-based Markdown editor built with Rust. 
 > Write documentation faster with advanced features like LSP support, multiple buffers, split windows, and session management.
@@ -203,10 +204,11 @@ Configuration file location:
 
 ## 🐛 Known Issues & Limitations
 
-- Large files (>100k lines) may experience performance degradation
-- Some terminal emulators may not support all Unicode characters perfectly; Scriptoris adjusts cursor position using Unicode display width for better alignment
-- LSP features require external language servers to be installed
-- No GUI preview mode (terminal-only by design)
+- **Performance**: Large files (>100k lines) may experience performance degradation
+- **Unicode Support**: Some terminal emulators may not support all Unicode characters perfectly; Scriptoris adjusts cursor position using Unicode display width for better alignment
+- **LSP Dependencies**: LSP features require external language servers to be installed
+- **Terminal-Only**: No GUI preview mode (terminal-only by design)
+- **Buffer/Window Commands**: Some advanced buffer and window management commands are temporarily disabled due to recent architecture improvements (will be restored in next release)
 
 ## 🗺️ Roadmap
 

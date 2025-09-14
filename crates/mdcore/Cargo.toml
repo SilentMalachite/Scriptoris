@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+description = "Markdown processing library for Scriptoris with GFM support and HTML sanitization"
+repository.workspace = true
+homepage.workspace = true
+keywords = ["markdown", "gfm", "html", "sanitization"]
+categories = ["text-processing", "parser-implementations"]
 
 [dependencies]
 comrak.workspace = true

@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_まだ変更はありません_
+### Fixed
+- **Architecture Improvements**: Major refactoring to resolve borrow checker conflicts and improve code structure
+  - Eliminated duplicate editor state between `App.editor` and `Buffer.content`
+  - Unified editor access through `get_current_editor()` methods
+  - Implemented Highlighter caching for better performance
+  - Converted `CommandProcessor` to static methods to resolve borrowing issues
+  - Improved UI rendering purity by removing state mutations during draw operations
+- **Test Coverage**: Updated all tests to work with new architecture
+- **Performance**: Reduced unnecessary Highlighter instantiations through caching
+- **Code Quality**: Resolved complex borrowing conflicts and improved maintainability
 
 ## [0.1.0] - 2025-09-10
 

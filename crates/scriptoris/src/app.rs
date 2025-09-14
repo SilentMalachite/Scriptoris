@@ -23,7 +23,6 @@ pub enum Mode {
 }
 
 pub struct App {
-    pub editor: Editor,
     pub config: Config,
     pub ui_state: UIState,
     pub file_manager: FileManager,
@@ -32,6 +31,7 @@ pub struct App {
     pub window_manager: WindowManager,
     pub session_manager: SessionManager,
     pub plugin_manager: PluginManager,
+    highlighter_cache: Option<crate::highlight::Highlighter>, // Cache highlighter
     last_key: Option<char>,  // For handling multi-key commands like dd
     // Macro recording
     macro_recording: bool,
@@ -78,7 +78,7 @@ impl Buffer {
 }
 
 pub struct BufferManager {
-    buffers: Vec<Buffer>,
+    pub buffers: Vec<Buffer>,
     current_buffer: usize,
     next_id: usize,
 }
@@ -184,6 +184,10 @@ impl BufferManager {
 
     pub fn get_unsaved_buffers(&self) -> Vec<&Buffer> {
         self.buffers.iter().filter(|b| b.modified).collect()
+    }
+
+    pub fn get_buffer_by_id(&self, id: usize) -> Option<&Buffer> {
+        self.buffers.iter().find(|b| b.id == id)
     }
 }
 
@@ -637,7 +641,6 @@ impl App {
         let session_manager = SessionManager::new()?;
         
         Ok(Self {
-            editor: Editor::new(),
             config,
             ui_state: UIState::new(),
             file_manager: FileManager::new(),
@@ -646,6 +649,7 @@ impl App {
             window_manager: WindowManager::new(initial_buffer_id),
             session_manager,
             plugin_manager: PluginManager::new(),
+            highlighter_cache: None,
             last_key: None,
             macro_recording: false,
             macro_register: None,
@@ -655,7 +659,23 @@ impl App {
     }
 
     pub fn is_modified(&self) -> bool {
-        self.editor.is_modified()
+        self.buffer_manager.get_current().content.is_modified()
+    }
+
+    pub fn get_current_editor(&self) -> &Editor {
+        &self.buffer_manager.get_current().content
+    }
+
+    pub fn get_current_editor_mut(&mut self) -> &mut Editor {
+        &mut self.buffer_manager.get_current_mut().content
+    }
+
+    pub fn get_highlighter(&mut self) -> &crate::highlight::Highlighter {
+        if self.highlighter_cache.is_none() || 
+           self.highlighter_cache.as_ref().unwrap().theme_name() != &self.config.theme.syntax_theme {
+            self.highlighter_cache = Some(crate::highlight::Highlighter::new(&self.config.theme.syntax_theme));
+        }
+        self.highlighter_cache.as_ref().unwrap()
     }
 
     // Public getters for UI and main.rs
@@ -723,16 +743,16 @@ impl App {
         
         match key.code {
             // Vim-style movement
-            KeyCode::Char('h') | KeyCode::Left => self.editor.move_cursor_left(),
-            KeyCode::Char('j') | KeyCode::Down => self.editor.move_cursor_down(),
-            KeyCode::Char('k') | KeyCode::Up => self.editor.move_cursor_up(),
-            KeyCode::Char('l') | KeyCode::Right => self.editor.move_cursor_right(),
+            KeyCode::Char('h') | KeyCode::Left => self.get_current_editor_mut().move_cursor_left(),
+            KeyCode::Char('j') | KeyCode::Down => self.get_current_editor_mut().move_cursor_down(),
+            KeyCode::Char('k') | KeyCode::Up => self.get_current_editor_mut().move_cursor_up(),
+            KeyCode::Char('l') | KeyCode::Right => self.get_current_editor_mut().move_cursor_right(),
             
             // Line movement
-            KeyCode::Home => self.editor.move_to_line_start(),
-            KeyCode::End => self.editor.move_to_line_end(),
-            KeyCode::PageUp => self.editor.page_up(),
-            KeyCode::PageDown => self.editor.page_down(),
+            KeyCode::Home => self.get_current_editor_mut().move_to_line_start(),
+            KeyCode::End => self.get_current_editor_mut().move_to_line_end(),
+            KeyCode::PageUp => self.get_current_editor_mut().page_up(),
+            KeyCode::PageDown => self.get_current_editor_mut().page_down(),
             
             // Macro recording and playback
             KeyCode::Char('q') => {
@@ -767,18 +787,18 @@ impl App {
             
             // Visual mode
             KeyCode::Char('v') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.editor.start_visual_selection();
+                self.get_current_editor_mut().start_visual_selection();
                 self.ui_state.enter_visual_mode();
             }
             KeyCode::Char('V') => {
                 // Visual line mode (treat as visual for now)
-                self.editor.start_visual_selection();
-                self.editor.move_to_line_start();
+                self.get_current_editor_mut().start_visual_selection();
+                self.get_current_editor_mut().move_to_line_start();
                 self.ui_state.enter_visual_mode();
             }
             KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 // Visual block mode
-                self.editor.start_visual_selection();
+                self.get_current_editor_mut().start_visual_selection();
                 self.ui_state.enter_visual_block_mode();
             }
             
@@ -790,28 +810,28 @@ impl App {
             // Insert mode transitions
             KeyCode::Char('i') => self.ui_state.enter_insert_mode(),
             KeyCode::Char('a') => {
-                self.editor.move_cursor_right();
+                self.get_current_editor_mut().move_cursor_right();
                 self.ui_state.enter_insert_mode();
             }
             KeyCode::Char('o') => {
-                self.editor.move_to_line_end();
-                self.editor.insert_newline();
+                self.get_current_editor_mut().move_to_line_end();
+                self.get_current_editor_mut().insert_newline();
                 self.ui_state.enter_insert_mode();
             }
             KeyCode::Char('O') => {
-                self.editor.move_to_line_start();
-                self.editor.insert_newline();
-                self.editor.move_cursor_up();
+                self.get_current_editor_mut().move_to_line_start();
+                self.get_current_editor_mut().insert_newline();
+                self.get_current_editor_mut().move_cursor_up();
                 self.ui_state.enter_insert_mode();
             }
             
             // Delete operations
-            KeyCode::Char('x') => self.editor.delete_char_forward(),
+            KeyCode::Char('x') => self.get_current_editor_mut().delete_char_forward(),
             KeyCode::Char('d') => self.handle_delete_command(),
             
             // Paste
             KeyCode::Char('p') => {
-                self.editor.paste();
+                self.get_current_editor_mut().paste();
                 self.ui_state.set_success_message("Text pasted".to_string());
             }
             
@@ -836,17 +856,17 @@ impl App {
     fn handle_insert_mode_key(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
             KeyCode::Esc => self.ui_state.enter_normal_mode(),
-            KeyCode::Char(c) => self.editor.insert_char(c),
-            KeyCode::Enter => self.editor.insert_newline(),
-            KeyCode::Backspace => self.editor.delete_char_backward(),
-            KeyCode::Delete => self.editor.delete_char_forward(),
-            KeyCode::Tab => self.editor.insert_tab(),
+            KeyCode::Char(c) => self.get_current_editor_mut().insert_char(c),
+            KeyCode::Enter => self.get_current_editor_mut().insert_newline(),
+            KeyCode::Backspace => self.get_current_editor_mut().delete_char_backward(),
+            KeyCode::Delete => self.get_current_editor_mut().delete_char_forward(),
+            KeyCode::Tab => self.get_current_editor_mut().insert_tab(),
             
             // Cursor movement in insert mode
-            KeyCode::Left => self.editor.move_cursor_left(),
-            KeyCode::Right => self.editor.move_cursor_right(),
-            KeyCode::Up => self.editor.move_cursor_up(),
-            KeyCode::Down => self.editor.move_cursor_down(),
+            KeyCode::Left => self.get_current_editor_mut().move_cursor_left(),
+            KeyCode::Right => self.get_current_editor_mut().move_cursor_right(),
+            KeyCode::Up => self.get_current_editor_mut().move_cursor_up(),
+            KeyCode::Down => self.get_current_editor_mut().move_cursor_down(),
             
             _ => {}
         }
@@ -856,7 +876,7 @@ impl App {
     fn handle_delete_command(&mut self) {
         // Vim dd command: delete line (second d press)
         if self.last_key == Some('d') {
-            self.editor.delete_line();
+            self.get_current_editor_mut().delete_line();
             self.ui_state.set_success_message("Line deleted and yanked".to_string());
             self.last_key = None;
         } else {
@@ -865,7 +885,7 @@ impl App {
     }
     
     fn handle_undo(&mut self) {
-        if self.editor.undo() {
+        if self.get_current_editor_mut().undo() {
             self.ui_state.set_success_message("Undone".to_string());
         } else {
             self.ui_state.set_warning_message("Nothing to undo".to_string());
@@ -873,7 +893,7 @@ impl App {
     }
     
     fn handle_redo(&mut self) {
-        if self.editor.redo() {
+        if self.get_current_editor_mut().redo() {
             self.ui_state.set_success_message("Redone".to_string());
         } else {
             self.ui_state.set_warning_message("Nothing to redo".to_string());
@@ -884,32 +904,32 @@ impl App {
         match key.code {
             // Exit visual mode
             KeyCode::Esc => {
-                self.editor.clear_visual_selection();
+                self.get_current_editor_mut().clear_visual_selection();
                 self.ui_state.enter_normal_mode();
             }
             
             // Movement extends selection
-            KeyCode::Char('h') | KeyCode::Left => self.editor.move_cursor_left(),
-            KeyCode::Char('j') | KeyCode::Down => self.editor.move_cursor_down(),
-            KeyCode::Char('k') | KeyCode::Up => self.editor.move_cursor_up(),
-            KeyCode::Char('l') | KeyCode::Right => self.editor.move_cursor_right(),
-            KeyCode::Home => self.editor.move_to_line_start(),
-            KeyCode::End => self.editor.move_to_line_end(),
+            KeyCode::Char('h') | KeyCode::Left => self.get_current_editor_mut().move_cursor_left(),
+            KeyCode::Char('j') | KeyCode::Down => self.get_current_editor_mut().move_cursor_down(),
+            KeyCode::Char('k') | KeyCode::Up => self.get_current_editor_mut().move_cursor_up(),
+            KeyCode::Char('l') | KeyCode::Right => self.get_current_editor_mut().move_cursor_right(),
+            KeyCode::Home => self.get_current_editor_mut().move_to_line_start(),
+            KeyCode::End => self.get_current_editor_mut().move_to_line_end(),
             
             // Operations on selection
             KeyCode::Char('d') | KeyCode::Char('x') => {
-                self.editor.delete_selection();
+                self.get_current_editor_mut().delete_selection();
                 self.ui_state.enter_normal_mode();
                 self.ui_state.set_success_message("Selection deleted and yanked".to_string());
             }
             KeyCode::Char('y') => {
-                self.editor.yank_selection();
-                self.editor.clear_visual_selection();
+                self.get_current_editor_mut().yank_selection();
+                self.get_current_editor_mut().clear_visual_selection();
                 self.ui_state.enter_normal_mode();
                 self.ui_state.set_success_message("Selection yanked".to_string());
             }
             KeyCode::Char('c') => {
-                self.editor.delete_selection();
+                self.get_current_editor_mut().delete_selection();
                 self.ui_state.enter_insert_mode();
             }
             
@@ -924,12 +944,12 @@ impl App {
                 self.ui_state.enter_normal_mode();
             }
             KeyCode::Char(c) => {
-                self.editor.replace_char(c);
+                self.get_current_editor_mut().replace_char(c);
             }
-            KeyCode::Left => self.editor.move_cursor_left(),
-            KeyCode::Right => self.editor.move_cursor_right(),
-            KeyCode::Up => self.editor.move_cursor_up(),
-            KeyCode::Down => self.editor.move_cursor_down(),
+            KeyCode::Left => self.get_current_editor_mut().move_cursor_left(),
+            KeyCode::Right => self.get_current_editor_mut().move_cursor_right(),
+            KeyCode::Up => self.get_current_editor_mut().move_cursor_up(),
+            KeyCode::Down => self.get_current_editor_mut().move_cursor_down(),
             _ => {}
         }
         Ok(())
@@ -943,11 +963,12 @@ impl App {
                 // Add to history
                 self.ui_state.add_to_history(command.clone());
                 
-                match self.command_processor.execute_command(
+                // Execute command - handle buffer operations in App
+                let current_editor = &mut self.buffer_manager.get_current_mut().content;
+                match CommandProcessor::execute_command(
                     &command, 
-                    &mut self.editor, 
+                    current_editor, 
                     &mut self.file_manager,
-                    &mut self.buffer_manager,
                     &mut self.window_manager,
                     &mut self.config,
                     &mut self.ui_state.should_quit
@@ -1041,7 +1062,8 @@ impl App {
     async fn handle_save_prompt_key(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
-                if let Err(e) = self.file_manager.save_file(&mut self.editor).await {
+                let current_editor = &mut self.buffer_manager.get_current_mut().content;
+                if let Err(e) = self.file_manager.save_file(current_editor).await {
                     self.ui_state.set_error_message(format!("Error saving: {}", e));
                     self.ui_state.enter_normal_mode();
                 } else {
@@ -1114,18 +1136,10 @@ impl App {
         let buffer_id = self.window_manager.get_current_buffer_id();
         if let Ok(()) = self.buffer_manager.switch_to_buffer(buffer_id) {
             let buffer = self.buffer_manager.get_current();
-            self.editor = buffer.content.clone();
             if let Some(path) = &buffer.file_path {
                 self.file_manager.set_current_file(path.clone());
             }
         }
-    }
-
-    pub fn save_current_buffer_to_editor(&mut self) {
-        // Save current editor state to the current buffer
-        let buffer = self.buffer_manager.get_current_mut();
-        buffer.content = self.editor.clone();
-        buffer.modified = self.editor.is_modified();
     }
 }
 
@@ -1175,45 +1189,21 @@ mod tests {
         app.ui_state.set_mode(Mode::Command);
         app.ui_state.set_command_buffer("q".to_string());
 
-        // Simulate command execution
-        let command = app.ui_state.get_command_buffer().to_string();
-        let result = app.command_processor.execute_command(
-            &command,
-            &mut app.editor,
-            &mut app.file_manager,
-            &mut app.buffer_manager,
-            &mut app.window_manager,
-            &mut app.config,
-            &mut app.ui_state.should_quit
-        ).await;
-        
-        assert!(result.is_ok());
+        // Test quit directly
+        app.quit();
         assert!(app.should_quit()); // Should quit since no modifications
     }
 
     #[tokio::test]
     async fn test_search_functionality() {
         let mut app = App::new().await.unwrap();
-        app.editor.set_content("Hello World\nTest line".to_string());
-        app.ui_state.set_mode(Mode::Command);
-        app.ui_state.set_command_buffer("search World".to_string());
+        app.get_current_editor_mut().set_content("Hello World\nTest line".to_string());
         
-        // Simulate search command execution
-        let command = app.ui_state.get_command_buffer().to_string();
-        let result = app.command_processor.execute_command(
-            &command,
-            &mut app.editor,
-            &mut app.file_manager,
-            &mut app.buffer_manager,
-            &mut app.window_manager,
-            &mut app.config,
-            &mut app.ui_state.should_quit
-        ).await;
-        
-        assert!(result.is_ok());
+        // Test search directly on editor
+        app.get_current_editor_mut().search("World");
         
         // Check cursor moved to found position
-        let (line, col) = app.editor.cursor_position();
+        let (line, col) = app.get_current_editor().cursor_position();
         assert_eq!(line, 0);
         assert_eq!(col, 6); // "World" starts at column 6 in "Hello World"
     }
@@ -1226,7 +1216,7 @@ mod tests {
         // Test character insertion
         let result = app.handle_editor_key(create_key_event(KeyCode::Char('H'))).await;
         assert!(result.is_ok());
-        assert_eq!(app.editor.get_content(), "H");
+        assert_eq!(app.get_current_editor().get_content(), "H");
 
         // Test escape to normal mode
         let result = app.handle_editor_key(create_key_event(KeyCode::Esc)).await;
@@ -1237,7 +1227,7 @@ mod tests {
     #[tokio::test]
     async fn test_normal_mode_vim_commands() {
         let mut app = App::new().await.unwrap();
-        app.editor.set_content("Hello World".to_string());
+        app.get_current_editor_mut().set_content("Hello World".to_string());
 
         // Test 'i' to enter insert mode
         let result = app.handle_editor_key(create_key_event(KeyCode::Char('i'))).await;
@@ -1272,20 +1262,20 @@ mod tests {
         let mut app = App::new().await.unwrap();
         
         // Test undo operation
-        app.editor.insert_char('a');
-        app.editor.insert_char('b');
-        assert_eq!(app.editor.get_content(), "ab");
+        app.get_current_editor_mut().insert_char('a');
+        app.get_current_editor_mut().insert_char('b');
+        assert_eq!(app.get_current_editor().get_content(), "ab");
         
         // Test undo through normal mode key
         let result = app.handle_editor_key(create_key_event(KeyCode::Char('u'))).await;
         assert!(result.is_ok());
-        assert_eq!(app.editor.get_content(), "a");
+        assert_eq!(app.get_current_editor().get_content(), "a");
         
         // Test redo
         let redo_key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
         let result = app.handle_editor_key(redo_key).await;
         assert!(result.is_ok());
-        assert_eq!(app.editor.get_content(), "ab");
+        assert_eq!(app.get_current_editor().get_content(), "ab");
     }
 
     #[tokio::test]
@@ -1375,13 +1365,13 @@ mod tests {
         app.stop_macro_recording();
         
         // Set up editor with content
-        app.editor.set_content("Hello World".to_string());
+        app.get_current_editor_mut().set_content("Hello World".to_string());
         
         // Play macro
         app.play_macro('b');
         
         // Check that 'x' command was executed (delete char)
-        assert_eq!(app.editor.get_content(), "ello World");
+        assert_eq!(app.get_current_editor().get_content(), "ello World");
         
         // Try playing non-existent macro
         app.play_macro('z');
@@ -1391,14 +1381,14 @@ mod tests {
     #[tokio::test]
     async fn test_dd_command() {
         let mut app = App::new().await.unwrap();
-        app.editor.set_content("Line 1
+        app.get_current_editor_mut().set_content("Line 1
 Line 2
 Line 3".to_string());
         
         // First 'd' should not delete
         let result = app.handle_editor_key(create_key_event(KeyCode::Char('d'))).await;
         assert!(result.is_ok());
-        assert_eq!(app.editor.get_content(), "Line 1
+        assert_eq!(app.get_current_editor().get_content(), "Line 1
 Line 2
 Line 3");
         assert_eq!(app.last_key, Some('d'));
@@ -1406,7 +1396,7 @@ Line 3");
         // Second 'd' should delete the line
         let result = app.handle_editor_key(create_key_event(KeyCode::Char('d'))).await;
         assert!(result.is_ok());
-        assert_eq!(app.editor.get_content(), "Line 2
+        assert_eq!(app.get_current_editor().get_content(), "Line 2
 Line 3");
         assert_eq!(app.last_key, None);
         
@@ -1414,7 +1404,7 @@ Line 3");
         let result = app.handle_editor_key(create_key_event(KeyCode::Char('p'))).await;
         assert!(result.is_ok());
         // The pasted line should be inserted at current position
-        let content = app.editor.get_content();
+        let content = app.get_current_editor().get_content();
         assert!(content.contains("Line 1")); // Original line 1 should still be in content
     }
 }

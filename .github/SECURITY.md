@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-We actively support the following versions of Scriptoris with security updates:
+We release patches for security vulnerabilities. Which versions are eligible for receiving such patches depends on the CVSS v3.0 Rating:
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -10,14 +10,15 @@ We actively support the following versions of Scriptoris with security updates:
 
 ## Reporting a Vulnerability
 
-We take the security of Scriptoris seriously. If you believe you have found a security vulnerability, please report it to us as described below.
+**Please do not report security vulnerabilities through public GitHub issues.**
 
-### How to Report
+Instead, please report them via GitHub's security advisory feature:
 
+1. Go to https://github.com/yourusername/scriptoris/security/advisories
+2. Click "Report a vulnerability"
+3. Fill out the form with details about the vulnerability
 
-### What to Include
-
-Please include the following information in your report:
+Please include the following information:
 
 - Type of issue (e.g. buffer overflow, SQL injection, cross-site scripting, etc.)
 - Full paths of source file(s) related to the manifestation of the issue
@@ -27,94 +28,19 @@ Please include the following information in your report:
 - Proof-of-concept or exploit code (if possible)
 - Impact of the issue, including how an attacker might exploit the issue
 
-This information will help us triage your report more quickly.
+## Response Timeline
 
-### Disclosure Policy
+- **Initial Response**: We will acknowledge receipt of your vulnerability report within 48 hours.
+- **Investigation**: We will investigate and validate the vulnerability within 7 days.
+- **Resolution**: We will work to resolve confirmed vulnerabilities within 30 days.
+- **Disclosure**: We will coordinate the disclosure timeline with you.
 
-When we receive a security bug report, we will:
+## Security Updates
 
-1. Confirm the problem and determine the affected versions
-2. Audit code to find any potential similar problems
-3. Prepare patches for all supported versions
-4. Release patched versions as soon as possible
-5. Publish a security advisory
+Security updates will be released as patch versions and announced through:
 
-### Safe Harbor
+- GitHub Security Advisories
+- Release notes
+- CHANGELOG.md
 
-We support safe harbor for security researchers who:
-
-- Make a good faith effort to avoid privacy violations, destruction of data, and interruption or degradation of our services
-- Only interact with accounts you own or with explicit permission of the account holder
-- Do not access a system beyond what is necessary to demonstrate a vulnerability
-- Report any vulnerability you've discovered promptly
-- Do not violate any other applicable laws or regulations
-
-### Comments on This Policy
-
-If you have suggestions on how this process could be improved please submit a pull request or file an issue to discuss.
-
-## Security Best Practices for Users
-
-### Installation
-
-- Always download Scriptoris from official sources:
-  - GitHub releases: https://github.com/yourusername/scriptoris/releases
-  - Cargo: `cargo install scriptoris`
-- Verify checksums/signatures when available
-
-### Configuration
-
-- Store configuration files in appropriate directories with correct permissions
-- Avoid storing sensitive information in configuration files
-- Review LSP server configurations and only use trusted language servers
-
-### Usage
-
-- Be cautious when editing files with elevated privileges
-- Keep your Rust toolchain and dependencies up to date
-- Report suspicious behavior or crashes that might indicate security issues
-
-## Dependencies
-
-Scriptoris relies on various third-party dependencies. We:
-
-- Regularly audit our dependencies for known vulnerabilities
-- Use automated tools to check for security issues
-- Update dependencies promptly when security patches are available
-- Pin dependency versions to ensure reproducible builds
-
-If you discover a vulnerability in one of our dependencies, please:
-
-1. Report it to the dependency's maintainers first
-2. Inform us so we can track the issue and update when patches are available
-
-## Security Considerations
-
-### Terminal Security
-
-As a terminal-based application, Scriptoris inherits the security model of the terminal environment:
-
-- Terminal escape sequences are handled carefully to prevent injection attacks
-- Input validation is performed on all user input
-- File system access is restricted to user-accessible paths
-
-### LSP Integration
-
-The Language Server Protocol (LSP) integration in Scriptoris:
-
-- Communicates with external language server processes
-- Does not execute arbitrary code from language servers
-- Validates all LSP messages and responses
-- Runs language servers in separate processes
-
-### Memory Safety
-
-Being written in Rust, Scriptoris benefits from memory safety guarantees:
-
-- No buffer overflows in safe Rust code
-- Careful review of any unsafe code blocks
-- Use of well-audited dependencies for low-level operations
-
----
-
-**Note**: This security policy is subject to change. Please check back regularly for updates.
+Thank you for helping keep Scriptoris secure!

@@ -7,7 +7,6 @@ use ratatui::{
 };
 
 use crate::app::{App, Mode};
-use crate::highlight::Highlighter;
 
 pub struct EnhancedUI;
 
@@ -80,15 +79,15 @@ impl EnhancedUI {
                 .split(area)
         };
 
-        app.editor.set_viewport_height(area.height as usize);
+        app.get_current_editor_mut().set_viewport_height(area.height as usize);
 
         // Draw line numbers if enabled
         if app.config.editor.line_numbers {
-            let start_line = app.editor.cursor_position().0.saturating_sub(area.height as usize / 2);
+            let start_line = app.get_current_editor().cursor_position().0.saturating_sub(area.height as usize / 2);
             let line_numbers: Vec<Line> = (0..area.height as usize)
                 .map(|i| {
                     let line_num = start_line + i + 1;
-                    let style = if line_num == app.editor.cursor_position().0 + 1 {
+                    let style = if line_num == app.get_current_editor().cursor_position().0 + 1 {
                         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(Color::DarkGray)
@@ -105,14 +104,14 @@ impl EnhancedUI {
         }
 
         // Draw editor content with syntax highlighting
-        let lines = app.editor.get_viewport_lines();
-        let (cursor_line, _cursor_col) = app.editor.cursor_position();
+        let lines = app.get_current_editor().get_viewport_lines();
+        let (cursor_line, _cursor_col) = app.get_current_editor().cursor_position();
 
-        // Initialize a temporary highlighter (later can be held in App state)
-        let theme_name = &app.config.theme.syntax_theme;
-        let highlighter = Highlighter::new(theme_name);
-        let syntax = match app.file_path() {
-            Some(p) => highlighter.find_syntax_for_filename(p.to_string_lossy().as_ref()),
+        // Get file path before borrowing highlighter
+        let file_path = app.file_path().map(|p| p.to_string_lossy().to_string());
+        let highlighter = app.get_highlighter();
+        let syntax = match file_path.as_ref() {
+            Some(p) => highlighter.find_syntax_for_filename(p),
             None => highlighter.find_syntax_for_filename("text.md"),
         };
 
@@ -146,12 +145,12 @@ impl EnhancedUI {
 
     fn draw_cursor(f: &mut Frame, app: &App, area: Rect) {
         use unicode_width::UnicodeWidthChar;
-        let (cursor_line, cursor_col) = app.editor.cursor_position();
+        let (cursor_line, cursor_col) = app.get_current_editor().cursor_position();
 
         // Compute display column considering fullwidth characters on the line
         // We recompute width from start to cursor_col for correctness
         let line_text = {
-            let lines = app.editor.get_viewport_lines();
+            let lines = app.get_current_editor().get_viewport_lines();
             lines.get(cursor_line).cloned().unwrap_or_default()
         };
         let logical_prefix: String = line_text.chars().take(cursor_col).collect();
@@ -199,8 +198,8 @@ impl EnhancedUI {
     }
 
     fn draw_file_info(f: &mut Frame, app: &App, area: Rect) {
-        let (line, col) = app.editor.cursor_position();
-        let line_count = app.editor.line_count();
+        let (line, col) = app.get_current_editor().cursor_position();
+        let line_count = app.get_current_editor().line_count();
         let progress = if line_count > 0 { line * 100 / line_count.max(1) } else { 0 };
         
         let file_info = match app.file_path() {

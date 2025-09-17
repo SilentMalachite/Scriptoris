@@ -5,13 +5,13 @@ pub mod command_processor;
 pub mod config;
 pub mod editor;
 pub mod enhanced_ui;
-pub mod highlight;
 pub mod file_manager;
+pub mod highlight;
 pub mod status_manager;
-pub mod ui;
 pub mod ui_state;
+pub mod session_manager;
 
-pub use app::{App, Mode, Plugin, PluginManager, BufferManager, WindowManager, SessionManager};
-pub use editor::Editor;
+pub use app::{App, BufferManager, Mode, Plugin, PluginManager, WindowManager};
 pub use config::Config;
-pub use ui_state::UIState;
+pub use editor::Editor;
+pub use session_manager::SessionManager;

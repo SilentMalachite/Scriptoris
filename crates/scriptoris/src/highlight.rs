@@ -6,7 +6,6 @@ use syntect::parsing::{SyntaxReference, SyntaxSet};
 
 pub struct Highlighter {
     syntax_set: SyntaxSet,
-    theme_set: ThemeSet,
     theme: Theme,
     theme_name: String,
 }
@@ -26,16 +25,8 @@ impl Highlighter {
 
         Self {
             syntax_set,
-            theme_set,
             theme,
             theme_name: theme_name.to_string(),
-        }
-    }
-
-    pub fn set_theme(&mut self, theme_name: &str) {
-        if let Some(t) = self.theme_set.themes.get(theme_name) {
-            self.theme = t.clone();
-            self.theme_name = theme_name.to_string();
         }
     }
 
@@ -50,8 +41,7 @@ impl Highlighter {
                 return md;
             }
         }
-        self
-            .syntax_set
+        self.syntax_set
             .find_syntax_for_file(filename)
             .ok()
             .and_then(|o| o)
@@ -79,7 +69,9 @@ impl Highlighter {
 
                 let spans: Vec<Span> = regions
                     .into_iter()
-                    .map(|(style, text)| Span::styled(text.to_string(), syn_style_to_ratatui(style)))
+                    .map(|(style, text)| {
+                        Span::styled(text.to_string(), syn_style_to_ratatui(style))
+                    })
                     .collect();
                 Line::from(spans)
             })

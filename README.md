@@ -2,14 +2,11 @@
 
 [![Rust](https://img.shields.io/badge/rust-1.82+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://github.com/yourusername/scriptoris/workflows/CI/badge.svg)](https://github.com/yourusername/scriptoris/actions)
+[![Build Status](https://github.com/SilentMalachite/Scriptoris/workflows/CI/badge.svg)](https://github.com/SilentMalachite/Scriptoris/actions)
 [![Tests](https://img.shields.io/badge/tests-56_passing-brightgreen.svg)](#)
 
 > A focused, Vim-inspired terminal Markdown editor built with Rust. 
 > Optimised for fast note taking and documentation with a lean, easy-to-understand codebase.
-
-![Scriptoris Demo](assets/demo.gif)
-*Coming soon: Demo gif showing key features*
 
 ## ✨ Features
 
@@ -44,7 +41,7 @@
 
 ```bash
 # Clone and build
-git clone https://github.com/yourusername/scriptoris.git
+git clone https://github.com/SilentMalachite/Scriptoris.git
 cd scriptoris
 cargo build --release
 
@@ -208,4 +205,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Scriptoris** - *Write better documentation, faster.* 📝✨
 
-For questions, bug reports, or feature requests, please [open an issue](https://github.com/yourusername/scriptoris/issues).
+For questions, bug reports, or feature requests, please [open an issue](https://github.com/SilentMalachite/Scriptoris/issues).

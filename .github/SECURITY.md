@@ -14,7 +14,7 @@ We release patches for security vulnerabilities. Which versions are eligible for
 
 Instead, please report them via GitHub's security advisory feature:
 
-1. Go to https://github.com/yourusername/scriptoris/security/advisories
+1. Go to https://github.com/SilentMalachite/Scriptoris/security/advisories
 2. Click "Report a vulnerability"
 3. Fill out the form with details about the vulnerability
 

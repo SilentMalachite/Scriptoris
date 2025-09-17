@@ -23,12 +23,12 @@ jobs:
     
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1
+      uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.ref }}
-        release_name: Scriptoris v${{ steps.get_version.outputs.VERSION }}
+        name: Scriptoris v${{ steps.get_version.outputs.VERSION }}
         body: |
           ## Changes
           
@@ -41,7 +41,7 @@ jobs:
           
           ### Build from Source
           ```bash
-          cargo install --git https://github.com/yourusername/scriptoris --tag v${{ steps.get_version.outputs.VERSION }}
+          cargo install --git https://github.com/SilentMalachite/Scriptoris --tag v${{ steps.get_version.outputs.VERSION }}
           ```
           
           ### Cargo
@@ -100,7 +100,7 @@ jobs:
         echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
 
     - name: Cache Cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -113,17 +113,19 @@ jobs:
 
     - name: Strip binary (Unix)
       if: matrix.os != 'windows-latest'
-      run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+      run: |
+        if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+          strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+        else
+          strip -s target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+        fi
 
     - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
+      uses: softprops/action-gh-release@v1
+      with:
+        files: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-        asset_name: ${{ matrix.asset_name }}
-        asset_content_type: application/octet-stream
 
   publish-crate:
     name: Publish to Crates.io

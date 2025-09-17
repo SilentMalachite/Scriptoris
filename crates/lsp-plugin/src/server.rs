@@ -1,11 +1,9 @@
 use anyhow::Result;
-use lsp_types::*;
+use serde_json::Value;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc;
-use serde_json::Value;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
@@ -42,7 +40,7 @@ impl LspServer {
             .await;
     }
 
-    async fn validate_document(&self, uri: &Url) -> Vec<Diagnostic> {
+    async fn validate_document(&self, _uri: &Url) -> Vec<Diagnostic> {
         // This is where you would implement actual validation logic
         // For now, we'll return an empty vector
         vec![]
@@ -142,14 +140,20 @@ impl LanguageServer for LspServer {
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri;
         let version = params.text_document.version;
-        
+
         // For simplicity, we assume full document sync
         if let Some(change) = params.content_changes.into_iter().last() {
-            self.documents.write().await.insert(uri.clone(), change.text);
-            
+            self.documents
+                .write()
+                .await
+                .insert(uri.clone(), change.text);
+
             let diagnostics = self.validate_document(&uri).await;
-            self.diagnostics.write().await.insert(uri.clone(), diagnostics.clone());
-            
+            self.diagnostics
+                .write()
+                .await
+                .insert(uri.clone(), diagnostics.clone());
+
             self.client
                 .publish_diagnostics(uri, diagnostics, Some(version))
                 .await;
@@ -161,32 +165,41 @@ impl LanguageServer for LspServer {
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
-        self.documents.write().await.remove(&params.text_document.uri);
-        self.diagnostics.write().await.remove(&params.text_document.uri);
+        self.documents
+            .write()
+            .await
+            .remove(&params.text_document.uri);
+        self.diagnostics
+            .write()
+            .await
+            .remove(&params.text_document.uri);
     }
 
     async fn completion(&self, _: CompletionParams) -> jsonrpc::Result<Option<CompletionResponse>> {
         // Return sample completions
-        Ok(Some(CompletionResponse::Array(vec![
-            CompletionItem {
-                label: "example".to_string(),
-                kind: Some(CompletionItemKind::TEXT),
-                detail: Some("Example completion".to_string()),
-                documentation: Some(Documentation::String("This is an example completion item".to_string())),
-                ..Default::default()
-            },
-        ])))
+        Ok(Some(CompletionResponse::Array(vec![CompletionItem {
+            label: "example".to_string(),
+            kind: Some(CompletionItemKind::TEXT),
+            detail: Some("Example completion".to_string()),
+            documentation: Some(Documentation::String(
+                "This is an example completion item".to_string(),
+            )),
+            ..Default::default()
+        }])))
     }
 
     async fn hover(&self, params: HoverParams) -> jsonrpc::Result<Option<Hover>> {
-        let uri = params.text_document_position_params.text_document.uri;
+        let _uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        
+
         // Return sample hover information
         Ok(Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: format!("Hover at line {}, character {}", position.line, position.character),
+                value: format!(
+                    "Hover at line {}, character {}",
+                    position.line, position.character
+                ),
             }),
             range: None,
         }))
@@ -217,7 +230,10 @@ impl LanguageServer for LspServer {
         Ok(None)
     }
 
-    async fn code_action(&self, _: CodeActionParams) -> jsonrpc::Result<Option<CodeActionResponse>> {
+    async fn code_action(
+        &self,
+        _: CodeActionParams,
+    ) -> jsonrpc::Result<Option<CodeActionResponse>> {
         Ok(None)
     }
 
@@ -229,7 +245,10 @@ impl LanguageServer for LspServer {
         Ok(params)
     }
 
-    async fn formatting(&self, _: DocumentFormattingParams) -> jsonrpc::Result<Option<Vec<TextEdit>>> {
+    async fn formatting(
+        &self,
+        _: DocumentFormattingParams,
+    ) -> jsonrpc::Result<Option<Vec<TextEdit>>> {
         Ok(None)
     }
 
@@ -244,7 +263,10 @@ impl LanguageServer for LspServer {
         Ok(None)
     }
 
-    async fn signature_help(&self, _: SignatureHelpParams) -> jsonrpc::Result<Option<SignatureHelp>> {
+    async fn signature_help(
+        &self,
+        _: SignatureHelpParams,
+    ) -> jsonrpc::Result<Option<SignatureHelp>> {
         Ok(None)
     }
 

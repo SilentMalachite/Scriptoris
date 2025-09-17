@@ -11,7 +11,6 @@ pub enum MessageType {
 #[derive(Debug, Clone)]
 pub struct StatusMessage {
     pub content: String,
-    pub message_type: MessageType,
     pub created_at: Instant,
     pub auto_clear_duration: Option<Duration>,
 }
@@ -21,25 +20,24 @@ impl StatusMessage {
         let auto_clear_duration = Self::default_duration_for_type(&message_type);
         Self {
             content,
-            message_type,
             created_at: Instant::now(),
             auto_clear_duration,
         }
     }
 
-    pub fn with_duration(content: String, message_type: MessageType, duration: Duration) -> Self {
+    #[cfg(test)]
+    pub fn with_duration(content: String, _message_type: MessageType, duration: Duration) -> Self {
         Self {
             content,
-            message_type,
             created_at: Instant::now(),
             auto_clear_duration: Some(duration),
         }
     }
 
-    pub fn permanent(content: String, message_type: MessageType) -> Self {
+    #[cfg(test)]
+    pub fn permanent(content: String, _message_type: MessageType) -> Self {
         Self {
             content,
-            message_type,
             created_at: Instant::now(),
             auto_clear_duration: None,
         }
@@ -93,16 +91,8 @@ impl StatusManager {
         self.current_message = Some(StatusMessage::new(message, MessageType::Error));
     }
 
-    pub fn set_permanent(&mut self, message: String, message_type: MessageType) {
-        self.current_message = Some(StatusMessage::permanent(message, message_type));
-    }
-
     pub fn set_mode_message(&mut self, message: String) {
         self.mode_message = message;
-    }
-
-    pub fn clear(&mut self) {
-        self.current_message = None;
     }
 
     pub fn update(&mut self) {
@@ -120,10 +110,6 @@ impl StatusManager {
     pub fn get_mode_message(&self) -> &str {
         &self.mode_message
     }
-
-    pub fn has_message(&self) -> bool {
-        self.current_message.is_some()
-    }
 }
 
 impl Default for StatusManager {
@@ -140,39 +126,37 @@ mod tests {
     #[test]
     fn test_status_manager_creation() {
         let manager = StatusManager::new();
-        assert!(!manager.has_message());
+        assert!(manager.current_message.is_none());
         assert_eq!(manager.get_mode_message(), "");
     }
 
     #[test]
     fn test_message_types() {
         let mut manager = StatusManager::new();
-        
+
         manager.set_info("Info message".to_string());
-        let message = manager.get_current_message().unwrap();
-        assert_eq!(message.message_type, MessageType::Info);
-        assert_eq!(message.content, "Info message");
+        assert_eq!(
+            manager.get_current_message().unwrap().content,
+            "Info message"
+        );
 
         manager.set_success("Success message".to_string());
-        let message = manager.get_current_message().unwrap();
-        assert_eq!(message.message_type, MessageType::Success);
+        assert!(manager.get_current_message().is_some());
 
         manager.set_warning("Warning message".to_string());
-        let message = manager.get_current_message().unwrap();
-        assert_eq!(message.message_type, MessageType::Warning);
+        assert!(manager.get_current_message().is_some());
 
         manager.set_error("Error message".to_string());
-        let message = manager.get_current_message().unwrap();
-        assert_eq!(message.message_type, MessageType::Error);
+        assert!(manager.get_current_message().is_some());
     }
 
     #[test]
     fn test_auto_clear() {
         let mut manager = StatusManager::new();
         manager.set_info("Test message".to_string());
-        
-        assert!(manager.has_message());
-        
+
+        assert!(manager.current_message.is_some());
+
         // Message shouldn't be expired immediately
         let message = manager.get_current_message().unwrap();
         assert!(!message.is_expired());
@@ -181,8 +165,11 @@ mod tests {
     #[test]
     fn test_permanent_message() {
         let mut manager = StatusManager::new();
-        manager.set_permanent("Permanent message".to_string(), MessageType::Info);
-        
+        manager.current_message = Some(StatusMessage::permanent(
+            "Permanent message".to_string(),
+            MessageType::Info,
+        ));
+
         let message = manager.get_current_message().unwrap();
         assert!(!message.is_expired());
         assert!(message.auto_clear_duration.is_none());
@@ -199,10 +186,10 @@ mod tests {
     fn test_clear() {
         let mut manager = StatusManager::new();
         manager.set_info("Test message".to_string());
-        assert!(manager.has_message());
-        
-        manager.clear();
-        assert!(!manager.has_message());
+        assert!(manager.current_message.is_some());
+
+        manager.current_message = None;
+        assert!(manager.current_message.is_none());
     }
 
     #[test]
@@ -210,13 +197,14 @@ mod tests {
         let mut manager = StatusManager::new();
         // Create a message with very short duration
         let short_duration = Duration::from_millis(1);
-        let message = StatusMessage::with_duration("Test".to_string(), MessageType::Info, short_duration);
+        let message =
+            StatusMessage::with_duration("Test".to_string(), MessageType::Info, short_duration);
         manager.current_message = Some(message);
-        
+
         // Wait for expiration
         thread::sleep(Duration::from_millis(10));
-        
+
         manager.update();
-        assert!(!manager.has_message());
+        assert!(manager.current_message.is_none());
     }
 }

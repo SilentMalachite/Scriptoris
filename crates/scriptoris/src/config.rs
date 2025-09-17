@@ -87,7 +87,7 @@ impl Config {
                 }
             }
         }
-        
+
         let default_config = Self::default();
         let _ = default_config.save().await;
         Ok(default_config)
@@ -105,9 +105,8 @@ impl Config {
     }
 
     fn config_path() -> Option<PathBuf> {
-        ProjectDirs::from("com", "scriptoris", "scriptoris").map(|dirs| {
-            dirs.config_dir().join("config.json")
-        })
+        ProjectDirs::from("com", "scriptoris", "scriptoris")
+            .map(|dirs| dirs.config_dir().join("config.json"))
     }
 }
 
@@ -118,7 +117,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
-        
+
         assert_eq!(config.theme.name, "dark");
         assert_eq!(config.font.size, 14);
         assert_eq!(config.font.family, "monospace");
@@ -133,21 +132,21 @@ mod tests {
     #[tokio::test]
     async fn test_config_serialization() {
         let config = Config::default();
-        
+
         // Test serialization
         let json = serde_json::to_string_pretty(&config);
         assert!(json.is_ok());
-        
+
         let json = json.unwrap();
         assert!(json.contains("\"theme\""));
         assert!(json.contains("\"font\""));
         assert!(json.contains("\"editor\""));
         assert!(json.contains("\"keybindings\""));
-        
+
         // Test deserialization
         let config_from_json: Result<Config, _> = serde_json::from_str(&json);
         assert!(config_from_json.is_ok());
-        
+
         let config_from_json = config_from_json.unwrap();
         assert_eq!(config.theme.name, config_from_json.theme.name);
         assert_eq!(config.font.size, config_from_json.font.size);
@@ -159,7 +158,7 @@ mod tests {
         // This test loads config - if file doesn't exist, should create default
         let config = Config::load().await;
         assert!(config.is_ok());
-        
+
         let config = config.unwrap();
         assert_eq!(config.theme.name, "dark");
         assert!(matches!(config.keybindings, KeybindingStyle::Vim));
@@ -171,15 +170,15 @@ mod tests {
         let vim = KeybindingStyle::Vim;
         let nano = KeybindingStyle::Nano;
         let emacs = KeybindingStyle::Emacs;
-        
+
         let vim_json = serde_json::to_string(&vim).unwrap();
         let nano_json = serde_json::to_string(&nano).unwrap();
         let emacs_json = serde_json::to_string(&emacs).unwrap();
-        
+
         assert_eq!(vim_json, "\"Vim\"");
         assert_eq!(nano_json, "\"Nano\"");
         assert_eq!(emacs_json, "\"Emacs\"");
-        
+
         // Test deserialization
         let vim_from_json: KeybindingStyle = serde_json::from_str(&vim_json).unwrap();
         assert!(matches!(vim_from_json, KeybindingStyle::Vim));

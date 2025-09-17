@@ -1,9 +1,9 @@
-use crate::app::{Window, Split, Buffer};
+use crate::app::{Split, Window};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -13,268 +13,108 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // Title bar
-            Constraint::Min(0),     // Editor area
-            Constraint::Length(2),  // Status bar
+            Constraint::Length(1), // Title bar
+            Constraint::Min(0),    // Editor area
+            Constraint::Length(2), // Status bar
         ])
         .split(f.size());
 
     draw_title_bar(f, app, chunks[0]);
-    
+
     if app.show_help() {
         draw_help(f, chunks[1]);
     } else {
         draw_windows(f, app, chunks[1], &app.window_manager.get_root().clone());
     }
-    
+
     draw_status_bar(f, app, chunks[2]);
 }
 
 fn draw_windows(f: &mut Frame, app: &mut App, area: Rect, window: &Window) {
-    match &window.split {
-        Split::Leaf { buffer_id } => {
-            // Draw single buffer in this window  
-            let current_window_id = app.window_manager.current_window_id;
-            let is_current = window.id == current_window_id;
-            
-            // Find buffer index to avoid borrowing conflicts
-            if let Some(buffer_index) = app.buffer_manager.buffers.iter().position(|b| b.id == *buffer_id) {
-                draw_buffer_by_index(f, app, buffer_index, area, is_current);
-            }
-        }
-        Split::Horizontal { top, bottom, ratio } => {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Percentage((ratio * 100.0) as u16),
-                    Constraint::Percentage(((1.0 - ratio) * 100.0) as u16),
-                ])
-                .split(area);
-            
-            draw_windows(f, app, chunks[0], top);
-            draw_windows(f, app, chunks[1], bottom);
-        }
-        Split::Vertical { left, right, ratio } => {
-            let chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage((ratio * 100.0) as u16),
-                    Constraint::Percentage(((1.0 - ratio) * 100.0) as u16),
-                ])
-                .split(area);
-            
-            draw_windows(f, app, chunks[0], left);
-            draw_windows(f, app, chunks[1], right);
-        }
+    let buffer_id = match &window.split {
+        Split::Leaf { buffer_id } => buffer_id,
+    };
+
+    let current_window_id = app.window_manager.current_window_id;
+    let is_current = window.id == current_window_id;
+
+    if let Some(buffer_index) = app
+        .buffer_manager
+        .buffers
+        .iter()
+        .position(|b| b.id == *buffer_id)
+    {
+        draw_buffer_by_index(f, app, buffer_index, area, is_current);
     }
 }
 
-fn draw_buffer_by_index(f: &mut Frame, app: &mut App, buffer_index: usize, area: Rect, is_current: bool) {
+fn draw_buffer_by_index(
+    f: &mut Frame,
+    app: &mut App,
+    buffer_index: usize,
+    area: Rect,
+    is_current: bool,
+) {
     let buffer = &app.buffer_manager.buffers[buffer_index];
-    
+
     let border_style = if is_current {
         Style::default().fg(Color::Yellow)
     } else {
         Style::default().fg(Color::DarkGray)
     };
-    
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style)
         .title(
-            buffer.file_path
+            buffer
+                .file_path
                 .as_ref()
                 .and_then(|p| p.file_name())
                 .and_then(|n| n.to_str())
-                .unwrap_or("[No Name]")
+                .unwrap_or("[No Name]"),
         );
-    
+
     let inner = block.inner(area);
     f.render_widget(block, area);
-    
+
     // Split for line numbers and content
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(5),  // Line numbers
-            Constraint::Min(0),     // Content
+            Constraint::Length(5), // Line numbers
+            Constraint::Min(0),    // Content
         ])
         .split(inner);
-    
+
     // Draw line numbers
     let viewport_lines = buffer.content.get_viewport_lines();
     let start_line = buffer.content.get_viewport_offset();
     let line_numbers: Vec<String> = (0..viewport_lines.len())
         .map(|i| format!("{:4}", start_line + i + 1))
         .collect();
-    
-    let line_numbers_widget = Paragraph::new(line_numbers.join("\n"))
-        .style(Style::default().fg(Color::DarkGray));
-    
+
+    let line_numbers_widget =
+        Paragraph::new(line_numbers.join("\n")).style(Style::default().fg(Color::DarkGray));
+
     f.render_widget(line_numbers_widget, chunks[0]);
-    
+
     // Get file path for syntax highlighting
-    let filename = buffer.file_path.as_ref().and_then(|p| p.to_str()).unwrap_or("text.md").to_string();
+    let filename = buffer
+        .file_path
+        .as_ref()
+        .and_then(|p| p.to_str())
+        .unwrap_or("text.md")
+        .to_string();
     let theme_name = app.config.theme.syntax_theme.clone();
-    
+
     // Use a temporary highlighter to avoid borrowing conflicts
     let highlighter = crate::highlight::Highlighter::new(&theme_name);
     let syntax = highlighter.find_syntax_for_filename(&filename);
     let content_lines = highlighter.highlight_lines_to_ratatui(&viewport_lines, syntax);
     let content_widget = Paragraph::new(content_lines).style(Style::default().fg(Color::White));
     f.render_widget(content_widget, chunks[1]);
-    
-    // Draw cursor if this is the current window
-    if is_current {
-        use unicode_width::UnicodeWidthChar;
-        let (cursor_line, cursor_col) = buffer.content.cursor_position();
-        let viewport_offset = buffer.content.get_viewport_offset();
 
-        if cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
-            let screen_line = cursor_line - viewport_offset;
-            let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
-            let logical_prefix: String = line_text.chars().take(cursor_col).collect();
-            let display_col: usize = logical_prefix.chars().map(|c| c.width().unwrap_or(1)).sum();
-            let x = chunks[1].x + display_col as u16;
-            let y = chunks[1].y + screen_line as u16;
-
-            if x < chunks[1].x + chunks[1].width && y < chunks[1].y + chunks[1].height {
-                f.set_cursor(x, y);
-            }
-        }
-    }
-}
-
-fn draw_buffer_safe(f: &mut Frame, app: &mut App, buffer: &Buffer, area: Rect, is_current: bool) {
-    // Clone the necessary data to avoid borrowing conflicts
-    let _buffer_id = buffer.id;
-    let file_path = buffer.file_path.clone();
-    let viewport_lines = buffer.content.get_viewport_lines();
-    let viewport_offset = buffer.content.get_viewport_offset();
-    let cursor_position = buffer.content.cursor_position();
-    
-    let border_style = if is_current {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(border_style)
-        .title(
-            file_path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .unwrap_or("[No Name]")
-        );
-    
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-    
-    // Split for line numbers and content
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(5),  // Line numbers
-            Constraint::Min(0),     // Content
-        ])
-        .split(inner);
-    
-    // Draw line numbers
-    let start_line = viewport_offset;
-    let line_numbers: Vec<String> = (0..viewport_lines.len())
-        .map(|i| format!("{:4}", start_line + i + 1))
-        .collect();
-    
-    let line_numbers_widget = Paragraph::new(line_numbers.join("\n"))
-        .style(Style::default().fg(Color::DarkGray));
-    
-    f.render_widget(line_numbers_widget, chunks[0]);
-    
-    // Get file path for syntax highlighting
-    let filename = file_path.as_ref().and_then(|p| p.to_str()).unwrap_or("text.md");
-    let highlighter = app.get_highlighter();
-    let syntax = highlighter.find_syntax_for_filename(filename);
-    let content_lines = highlighter.highlight_lines_to_ratatui(&viewport_lines, syntax);
-    let content_widget = Paragraph::new(content_lines).style(Style::default().fg(Color::White));
-    f.render_widget(content_widget, chunks[1]);
-    
-    // Draw cursor if this is the current window
-    if is_current {
-        use unicode_width::UnicodeWidthChar;
-        let (cursor_line, cursor_col) = cursor_position;
-
-        if cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
-            let screen_line = cursor_line - viewport_offset;
-            let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
-            let logical_prefix: String = line_text.chars().take(cursor_col).collect();
-            let display_col: usize = logical_prefix.chars().map(|c| c.width().unwrap_or(1)).sum();
-            let x = chunks[1].x + display_col as u16;
-            let y = chunks[1].y + screen_line as u16;
-
-            if x < chunks[1].x + chunks[1].width && y < chunks[1].y + chunks[1].height {
-                f.set_cursor(x, y);
-            }
-        }
-    }
-}
-
-fn draw_buffer(f: &mut Frame, app: &mut App, buffer: &Buffer, area: Rect, is_current: bool) {
-    let border_style = if is_current {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(border_style)
-        .title(
-            buffer.file_path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .unwrap_or("[No Name]")
-        );
-    
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-    
-    // Split for line numbers and content
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(5),  // Line numbers
-            Constraint::Min(0),     // Content
-        ])
-        .split(inner);
-    
-    // Draw line numbers
-    let _line_count = buffer.content.line_count();
-    let viewport_lines = buffer.content.get_viewport_lines();
-    let start_line = buffer.content.get_viewport_offset();
-    
-    let line_numbers: Vec<String> = (0..viewport_lines.len())
-        .map(|i| format!("{:4}", start_line + i + 1))
-        .collect();
-    
-    let line_numbers_widget = Paragraph::new(line_numbers.join("\n"))
-        .style(Style::default().fg(Color::DarkGray));
-    
-    f.render_widget(line_numbers_widget, chunks[0]);
-    
-    // Draw content with basic syntax highlighting as well
-    let highlighter = app.get_highlighter();
-    let syntax = match buffer.file_path.as_ref().and_then(|p| p.to_str()) {
-        Some(name) => highlighter.find_syntax_for_filename(name),
-        None => highlighter.find_syntax_for_filename("text.md"),
-    };
-    let content_lines = highlighter.highlight_lines_to_ratatui(&viewport_lines, syntax);
-    let content_widget = Paragraph::new(content_lines).style(Style::default().fg(Color::White));
-    f.render_widget(content_widget, chunks[1]);
-    
     // Draw cursor if this is the current window
     if is_current {
         use unicode_width::UnicodeWidthChar;
@@ -301,95 +141,23 @@ fn draw_title_bar(f: &mut Frame, app: &App, area: Rect) {
         Some(path) => format!("  Scriptoris -- {}", path.display()),
         None => String::from("  Scriptoris -- [New File]"),
     };
-    
+
     let modified_str = if app.is_modified() { " [Modified]" } else { "" };
     let title = format!("{}{}", title, modified_str);
-    
+
     let title_bar = Paragraph::new(title)
         .style(Style::default().bg(Color::Blue).fg(Color::White))
         .alignment(Alignment::Left);
-    
+
     f.render_widget(title_bar, area);
-}
-
-fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
-    let editor_area = if app.config.editor.line_numbers {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(6),  // Line numbers
-                Constraint::Min(0),     // Editor content
-            ])
-            .split(area)
-    } else {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(0),  // No line numbers
-                Constraint::Min(0),     // Editor content
-            ])
-            .split(area)
-    };
-
-    // Update viewport height
-    app.get_current_editor_mut().set_viewport_height(area.height as usize);
-
-    // Draw line numbers if enabled
-    if app.config.editor.line_numbers {
-        draw_line_numbers(f, app, editor_area[0]);
-    }
-
-    // Draw editor content
-    let lines = app.get_current_editor().get_viewport_lines();
-    let (cursor_line, cursor_col) = app.get_current_editor().cursor_position();
-    
-    let mut text_lines = Vec::new();
-    for (i, line) in lines.iter().enumerate() {
-        let line_str = line.trim_end_matches('\n');
-        
-        if app.config.editor.highlight_current_line && i == cursor_line {
-            text_lines.push(Line::from(vec![
-                Span::styled(line_str, Style::default().bg(Color::DarkGray))
-            ]));
-        } else {
-            text_lines.push(Line::from(line_str));
-        }
-    }
-    
-    let editor_content = Paragraph::new(text_lines)
-        .style(Style::default().fg(Color::White))
-        .block(Block::default().borders(Borders::NONE))
-        .wrap(Wrap { trim: false });
-    
-    f.render_widget(editor_content, editor_area[1]);
-    
-    // Set cursor position
-    let cursor_x = editor_area[1].x + cursor_col as u16;
-    let cursor_y = editor_area[1].y + cursor_line as u16;
-    f.set_cursor(cursor_x, cursor_y);
-}
-
-fn draw_line_numbers(f: &mut Frame, app: &App, area: Rect) {
-    let lines = app.get_current_editor().get_viewport_lines();
-    let mut line_numbers = Vec::new();
-    
-    for i in 0..lines.len() {
-        line_numbers.push(Line::from(format!("{:>4} ", i + 1)));
-    }
-    
-    let line_number_widget = Paragraph::new(line_numbers)
-        .style(Style::default().fg(Color::DarkGray))
-        .block(Block::default().borders(Borders::RIGHT));
-    
-    f.render_widget(line_number_widget, area);
 }
 
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // Command shortcuts
-            Constraint::Length(1),  // Status message
+            Constraint::Length(1), // Command shortcuts
+            Constraint::Length(1), // Status message
         ])
         .split(area);
 
@@ -402,36 +170,62 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         }
         _ => {
             let shortcuts = vec![
-                Span::styled(":", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    ":",
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" Command  "),
-                Span::styled("i", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "i",
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" Insert  "),
-                Span::styled("/", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "/",
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" Search  "),
-                Span::styled("?", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "?",
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" Help  "),
-                Span::styled("hjkl", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "hjkl",
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" Move"),
             ];
-            
-            let shortcut_bar = Paragraph::new(Line::from(shortcuts))
-                .style(Style::default().bg(Color::DarkGray));
+
+            let shortcut_bar =
+                Paragraph::new(Line::from(shortcuts)).style(Style::default().bg(Color::DarkGray));
             f.render_widget(shortcut_bar, chunks[0]);
         }
     }
 
     // Draw status message
-    let status = Paragraph::new(app.status_message().to_string())
-        .style(Style::default().fg(Color::Yellow));
+    let status =
+        Paragraph::new(app.status_message().to_string()).style(Style::default().fg(Color::Yellow));
     f.render_widget(status, chunks[1]);
 }
 
 fn draw_help(f: &mut Frame, area: Rect) {
     let help_text = vec![
         Line::from(""),
-        Line::from(vec![
-            Span::styled(" HELP -- Vim-style Key Bindings", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            " HELP -- Vim-style Key Bindings",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from(""),
         Line::from(" Mode Commands:"),
         Line::from("  i       Insert mode    - Start inserting text"),
@@ -459,9 +253,10 @@ fn draw_help(f: &mut Frame, area: Rect) {
         Line::from(" Search:"),
         Line::from("  /text   Search         - Search for text"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled(" Press ? to exit help", Style::default().add_modifier(Modifier::ITALIC)),
-        ]),
+        Line::from(vec![Span::styled(
+            " Press ? to exit help",
+            Style::default().add_modifier(Modifier::ITALIC),
+        )]),
     ];
 
     let help = Paragraph::new(help_text)

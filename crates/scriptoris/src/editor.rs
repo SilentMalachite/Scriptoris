@@ -37,7 +37,7 @@ impl Editor {
             visual_start_line: None,
             visual_start_col: None,
         };
-        
+
         Self {
             rope: Rope::new(),
             cursor_line: 0,
@@ -61,7 +61,7 @@ impl Editor {
         self.modified = false;
         self.visual_start_line = None;
         self.visual_start_col = None;
-        
+
         // Reset history with new content
         let initial_state = EditorState {
             content,
@@ -94,23 +94,33 @@ impl Editor {
         (self.cursor_line, self.cursor_col)
     }
 
+    pub fn set_cursor_position(&mut self, line: usize, col: usize) {
+        // Ensure line is within bounds
+        let max_line = self.rope.len_lines().saturating_sub(1);
+        self.cursor_line = line.min(max_line);
+
+        // Ensure column is within bounds for the current line
+        if let Some(line_content) = self.rope.get_line(self.cursor_line) {
+            let max_col = line_content.len_chars().saturating_sub(1);
+            self.cursor_col = col.min(max_col);
+        } else {
+            self.cursor_col = 0;
+        }
+
+        self.adjust_viewport();
+    }
+
     pub fn set_viewport_height(&mut self, height: usize) {
         self.viewport_height = height;
     }
 
+    pub fn set_viewport_offset(&mut self, offset: usize) {
+        let max_offset = self.rope.len_lines().saturating_sub(self.viewport_height);
+        self.viewport_offset = offset.min(max_offset);
+    }
+
     pub fn get_viewport_offset(&self) -> usize {
         self.viewport_offset
-    }
-
-    pub fn set_viewport_offset(&mut self, offset: usize) {
-        self.viewport_offset = offset;
-    }
-
-    pub fn set_cursor_position(&mut self, line: usize, col: usize) {
-        self.cursor_line = line.min(self.rope.len_lines().saturating_sub(1));
-        self.cursor_col = col;
-        self.adjust_cursor_col();
-        self.adjust_viewport();
     }
 
     pub fn get_viewport_lines(&self) -> Vec<String> {
@@ -307,7 +317,7 @@ impl Editor {
     pub fn search(&mut self, query: &str) {
         let content = self.rope.to_string();
         let current_pos = self.line_col_to_char_idx(self.cursor_line, self.cursor_col);
-        
+
         if let Some(pos) = content[current_pos..].find(query) {
             let found_pos = current_pos + pos;
             let (line, col) = self.char_idx_to_line_col(found_pos);
@@ -325,28 +335,28 @@ impl Editor {
             visual_start_line: self.visual_start_line,
             visual_start_col: self.visual_start_col,
         };
-        
+
         // Don't save if the content hasn't changed from current history state
         if let Some(last_state) = self.history.get(self.history_index) {
             if last_state.content == current_state.content {
                 return;
             }
         }
-        
+
         // Remove any states after current index (if we're not at the end)
         self.history.truncate(self.history_index + 1);
-        
+
         // Add new state
         self.history.push(current_state);
         self.history_index += 1;
-        
+
         // Limit history size to prevent memory issues
         if self.history.len() > 100 {
             self.history.remove(0);
             self.history_index -= 1;
         }
     }
-    
+
     pub fn undo(&mut self) -> bool {
         if self.history_index > 0 {
             self.history_index -= 1;
@@ -361,7 +371,7 @@ impl Editor {
             false
         }
     }
-    
+
     pub fn redo(&mut self) -> bool {
         if self.history_index + 1 < self.history.len() {
             self.history_index += 1;
@@ -382,16 +392,17 @@ impl Editor {
         self.visual_start_line = Some(self.cursor_line);
         self.visual_start_col = Some(self.cursor_col);
     }
-    
+
     pub fn clear_visual_selection(&mut self) {
         self.visual_start_line = None;
         self.visual_start_col = None;
     }
-    
+
     pub fn get_visual_selection(&self) -> Option<(usize, usize, usize, usize)> {
-        if let (Some(start_line), Some(start_col)) = (self.visual_start_line, self.visual_start_col) {
+        if let (Some(start_line), Some(start_col)) = (self.visual_start_line, self.visual_start_col)
+        {
             let (end_line, end_col) = (self.cursor_line, self.cursor_col);
-            
+
             // Ensure start is before end
             if start_line < end_line || (start_line == end_line && start_col <= end_col) {
                 Some((start_line, start_col, end_line, end_col))
@@ -402,7 +413,7 @@ impl Editor {
             None
         }
     }
-    
+
     pub fn get_selected_text(&self) -> String {
         if let Some((start_line, start_col, end_line, end_col)) = self.get_visual_selection() {
             let start_idx = self.line_col_to_char_idx(start_line, start_col);
@@ -412,15 +423,15 @@ impl Editor {
             String::new()
         }
     }
-    
+
     pub fn delete_selection(&mut self) {
         if let Some((start_line, start_col, end_line, end_col)) = self.get_visual_selection() {
             let start_idx = self.line_col_to_char_idx(start_line, start_col);
             let end_idx = self.line_col_to_char_idx(end_line, end_col);
-            
+
             // Save deleted text to clipboard
             self.clipboard = self.rope.slice(start_idx..end_idx).to_string();
-            
+
             self.rope.remove(start_idx..end_idx);
             self.cursor_line = start_line;
             self.cursor_col = start_col;
@@ -430,11 +441,11 @@ impl Editor {
             self.modified = true;
         }
     }
-    
+
     pub fn yank_selection(&mut self) {
         self.clipboard = self.get_selected_text();
     }
-    
+
     // Replace mode methods
     pub fn replace_char(&mut self, c: char) {
         let idx = self.line_col_to_char_idx(self.cursor_line, self.cursor_col);
@@ -471,7 +482,7 @@ mod tests {
         let mut editor = Editor::new();
         editor.insert_char('H');
         editor.insert_char('i');
-        
+
         assert_eq!(editor.get_content(), "Hi");
         assert_eq!(editor.cursor_col, 2);
         assert!(editor.is_modified());
@@ -484,7 +495,7 @@ mod tests {
         editor.insert_char('i');
         editor.insert_newline();
         editor.insert_char('!');
-        
+
         assert_eq!(editor.get_content(), "Hi\n!");
         assert_eq!(editor.cursor_line, 1);
         assert_eq!(editor.cursor_col, 1);
@@ -497,7 +508,7 @@ mod tests {
         editor.insert_char('H');
         editor.insert_char('i');
         editor.delete_char_backward();
-        
+
         assert_eq!(editor.get_content(), "H");
         assert_eq!(editor.cursor_col, 1);
     }
@@ -506,19 +517,19 @@ mod tests {
     fn test_cursor_movement() {
         let mut editor = Editor::new();
         editor.set_content("Hello\nWorld".to_string());
-        
+
         // Test right movement
         editor.move_cursor_right();
         assert_eq!(editor.cursor_col, 1);
-        
+
         // Test down movement
         editor.move_cursor_down();
         assert_eq!(editor.cursor_line, 1);
-        
+
         // Test left movement
         editor.move_cursor_left();
         assert_eq!(editor.cursor_col, 0);
-        
+
         // Test up movement
         editor.move_cursor_up();
         assert_eq!(editor.cursor_line, 0);
@@ -528,12 +539,12 @@ mod tests {
     fn test_search_functionality() {
         let mut editor = Editor::new();
         editor.set_content("Hello World\nHi there".to_string());
-        
+
         // Search for "World" - should move cursor to line 0, col 6
         editor.search("World");
         assert_eq!(editor.cursor_line, 0);
         assert_eq!(editor.cursor_col, 6);
-        
+
         // Search for "Hi" - should move cursor to line 1, col 0
         editor.search("Hi");
         assert_eq!(editor.cursor_line, 1);
@@ -545,12 +556,12 @@ mod tests {
         let mut editor = Editor::new();
         editor.set_content("Line 1\nLine 2\nLine 3".to_string());
         editor.cursor_line = 1; // Move to second line
-        
+
         // Test line deletion
         editor.delete_line();
         assert_eq!(editor.get_content(), "Line 1\nLine 3");
         assert_eq!(editor.line_count(), 2);
-        
+
         // Test paste
         editor.paste();
         assert_eq!(editor.get_content(), "Line 1\nLine 2\nLine 3");
@@ -560,10 +571,10 @@ mod tests {
     fn test_modified_state() {
         let mut editor = Editor::new();
         assert!(!editor.is_modified());
-        
+
         editor.insert_char('a');
         assert!(editor.is_modified());
-        
+
         editor.mark_saved();
         assert!(!editor.is_modified());
     }
@@ -572,56 +583,56 @@ mod tests {
     fn test_content_setting() {
         let mut editor = Editor::new();
         let test_content = "This is a test\nWith multiple lines\nAnd more content";
-        
+
         editor.set_content(test_content.to_string());
         assert_eq!(editor.get_content(), test_content);
         assert_eq!(editor.line_count(), 3);
         assert!(!editor.is_modified()); // set_content should not mark as modified
     }
-    
+
     #[test]
     fn test_undo_redo_functionality() {
         let mut editor = Editor::new();
-        
+
         // Initial state should have no undo/redo
         assert!(!editor.undo());
         assert!(!editor.redo());
-        
+
         // Insert some text
         editor.insert_char('H');
         editor.insert_char('i');
         assert_eq!(editor.get_content(), "Hi");
-        
+
         // Test undo
         assert!(editor.undo());
         assert_eq!(editor.get_content(), "H");
-        
+
         // Test redo
         assert!(editor.redo());
         assert_eq!(editor.get_content(), "Hi");
-        
+
         // Test multiple operations and undo
         editor.insert_char('!');
         assert_eq!(editor.get_content(), "Hi!");
-        
+
         // Undo should restore previous state
         assert!(editor.undo());
         assert_eq!(editor.get_content(), "Hi");
-        
+
         // Undo again
         assert!(editor.undo());
         assert_eq!(editor.get_content(), "H");
-        
+
         // Try to undo beyond history
         assert!(editor.undo());
         assert_eq!(editor.get_content(), "");
         assert!(!editor.undo()); // Should fail - no more history
     }
-    
+
     #[test]
     fn test_undo_redo_with_line_operations() {
         let mut editor = Editor::new();
-        
+
         editor.insert_char('L');
         editor.insert_char('i');
         editor.insert_char('n');
@@ -635,14 +646,14 @@ mod tests {
         editor.insert_char('e');
         editor.insert_char(' ');
         editor.insert_char('2');
-        
+
         assert_eq!(editor.get_content(), "Line 1\nLine 2");
-        
+
         // Delete the second line
         editor.cursor_line = 1;
         editor.delete_line();
         assert_eq!(editor.get_content(), "Line 1\n");
-        
+
         // Undo should restore the line
         assert!(editor.undo());
         assert_eq!(editor.get_content(), "Line 1\nLine 2");
@@ -652,68 +663,68 @@ mod tests {
     fn test_visual_mode_selection() {
         let mut editor = Editor::new();
         editor.set_content("Hello World\nTest Line\nThird Line".to_string());
-        
+
         // Start visual selection at beginning
         editor.start_visual_selection();
         assert!(editor.visual_start_line.is_some());
         assert_eq!(editor.visual_start_line, Some(0));
         assert_eq!(editor.visual_start_col, Some(0));
-        
+
         // Move cursor to select text
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right(); // Select "Hello"
-        
+
         let selected = editor.get_selected_text();
         assert_eq!(selected, "Hello");
-        
+
         // Clear selection
         editor.clear_visual_selection();
         assert!(editor.visual_start_line.is_none());
     }
-    
+
     #[test]
     fn test_visual_selection_multiline() {
         let mut editor = Editor::new();
         editor.set_content("Line 1\nLine 2\nLine 3".to_string());
-        
+
         // Start selection at Line 1
         editor.start_visual_selection();
-        
+
         // Move to Line 2
         editor.move_cursor_down();
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
-        
+
         let selected = editor.get_selected_text();
         assert!(selected.contains("Line 1"));
         assert!(selected.contains("Line"));
     }
-    
+
     #[test]
     fn test_replace_char() {
         let mut editor = Editor::new();
         editor.set_content("Hello World".to_string());
-        
+
         // Replace 'H' with 'J'
         editor.replace_char('J');
         assert_eq!(editor.get_content(), "Jello World");
         assert_eq!(editor.cursor_col, 1);
-        
+
         // Replace 'e' with 'i'
         editor.replace_char('i');
         assert_eq!(editor.get_content(), "Jillo World");
     }
-    
+
     #[test]
     fn test_delete_selection() {
         let mut editor = Editor::new();
         editor.set_content("Hello World".to_string());
-        
+
         // Select "Hello"
         editor.start_visual_selection();
         editor.move_cursor_right();
@@ -721,64 +732,64 @@ mod tests {
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
-        
+
         editor.delete_selection();
         assert_eq!(editor.get_content(), " World");
         assert!(editor.visual_start_line.is_none());
-        
+
         // Check clipboard
         assert_eq!(editor.clipboard, "Hello");
     }
-    
+
     #[test]
     fn test_yank_selection() {
         let mut editor = Editor::new();
         editor.set_content("Copy this text".to_string());
-        
+
         // Select "Copy"
         editor.start_visual_selection();
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
-        
+
         editor.yank_selection();
         assert_eq!(editor.clipboard, "Copy");
-        
+
         // Text should still be there
         assert_eq!(editor.get_content(), "Copy this text");
     }
-    
+
     #[test]
     fn test_history_limit() {
         let mut editor = Editor::new();
-        
+
         // Insert more than 100 characters to test history limit
         for i in 0..110 {
             editor.insert_char((b'a' + (i % 26) as u8) as char);
         }
-        
+
         // History should be limited, but we should still be able to undo some operations
         assert!(editor.undo());
         assert!(editor.history.len() <= 100);
     }
-    
+
     #[test]
     fn test_set_content_resets_history() {
         let mut editor = Editor::new();
-        
+
         // Add some content and changes
         editor.insert_char('H');
         editor.insert_char('i');
         assert!(editor.undo()); // Should work
-        
+
         // Set new content should reset history
         editor.set_content("New content".to_string());
         assert_eq!(editor.get_content(), "New content");
-        
+
         // Should not be able to undo to previous content
         assert!(!editor.undo());
-        
+
         // But can undo changes made after set_content
         editor.insert_char('!');
         assert!(editor.undo());

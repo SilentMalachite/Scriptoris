@@ -1,5 +1,5 @@
 use crate::app::Mode;
-use crate::status_manager::{StatusManager, MessageType};
+use crate::status_manager::StatusManager;
 
 #[derive(Clone)]
 pub struct UIState {
@@ -36,21 +36,17 @@ impl UIState {
         &self.mode
     }
 
-    pub fn set_status_message(&mut self, message: String) {
-        self.status_message = message;
-    }
-
     pub fn get_status_message(&self) -> &str {
         &self.status_message
     }
 
-    pub fn clear_status_message(&mut self) {
-        self.status_message.clear();
-    }
-
     pub fn toggle_help(&mut self) {
         self.show_help = !self.show_help;
-        self.mode = if self.show_help { Mode::Help } else { Mode::Normal };
+        self.mode = if self.show_help {
+            Mode::Help
+        } else {
+            Mode::Normal
+        };
     }
 
     pub fn is_help_shown(&self) -> bool {
@@ -78,7 +74,8 @@ impl UIState {
 
     pub fn enter_insert_mode(&mut self) {
         self.mode = Mode::Insert;
-        self.status_manager.set_mode_message("-- INSERT --".to_string());
+        self.status_manager
+            .set_mode_message("-- INSERT --".to_string());
         self.status_message = "-- INSERT --".to_string();
     }
 
@@ -90,23 +87,24 @@ impl UIState {
 
     pub fn enter_visual_mode(&mut self) {
         self.mode = Mode::Visual;
-        self.status_manager.set_mode_message("-- VISUAL --".to_string());
+        self.status_manager
+            .set_mode_message("-- VISUAL --".to_string());
         self.status_message = "-- VISUAL --".to_string();
     }
-    
+
     pub fn enter_visual_block_mode(&mut self) {
         self.mode = Mode::VisualBlock;
-        self.status_manager.set_mode_message("-- VISUAL BLOCK --".to_string());
+        self.status_manager
+            .set_mode_message("-- VISUAL BLOCK --".to_string());
         self.status_message = "-- VISUAL BLOCK --".to_string();
     }
-    
+
     pub fn enter_replace_mode(&mut self) {
         self.mode = Mode::Replace;
-        self.status_manager.set_mode_message("-- REPLACE --".to_string());
+        self.status_manager
+            .set_mode_message("-- REPLACE --".to_string());
         self.status_message = "-- REPLACE --".to_string();
     }
-
-
 
     pub fn get_command_buffer(&self) -> &str {
         &self.command_buffer
@@ -136,11 +134,6 @@ impl UIState {
         self.should_quit
     }
 
-    pub fn cancel_quit(&mut self) {
-        self.should_quit = false;
-    }
-
-    
     // Enhanced status methods using StatusManager
     pub fn set_info_message(&mut self, message: String) {
         self.status_message = message.clone();
@@ -162,14 +155,9 @@ impl UIState {
         self.status_manager.set_error(message);
     }
 
-    pub fn set_permanent_message(&mut self, message: String, message_type: MessageType) {
-        self.status_message = message.clone();
-        self.status_manager.set_permanent(message, message_type);
-    }
-
     pub fn update_status(&mut self) {
         self.status_manager.update();
-        
+
         // Update backward compatible status_message
         if let Some(current) = self.status_manager.get_current_message() {
             self.status_message.clear();
@@ -180,32 +168,6 @@ impl UIState {
     }
 
     // Enhanced status methods with duration control
-    pub fn set_timed_message(&mut self, message: String, seconds: u64) {
-        use crate::status_manager::MessageType;
-        use std::time::Duration;
-        
-        let duration = Duration::from_secs(seconds);
-        self.status_manager.current_message = Some(
-            crate::status_manager::StatusMessage::with_duration(
-                message.clone(), 
-                MessageType::Info, 
-                duration
-            )
-        );
-        self.status_message = message;
-    }
-    
-    pub fn set_permanent_warning(&mut self, message: String) {
-        use crate::status_manager::MessageType;
-        
-        self.status_manager.set_permanent(message.clone(), MessageType::Warning);
-        self.status_message = message;
-    }
-    
-    pub fn clear_status(&mut self) {
-        self.status_manager.clear();
-        self.status_message.clear();
-    }
 
     // Command history methods
     pub fn add_to_history(&mut self, command: String) {
@@ -219,27 +181,27 @@ impl UIState {
         }
         self.history_index = None;
     }
-    
+
     pub fn history_up(&mut self) {
         if self.command_history.is_empty() {
             return;
         }
-        
+
         let new_index = match self.history_index {
             None => self.command_history.len() - 1,
             Some(0) => 0,
             Some(i) => i - 1,
         };
-        
+
         self.history_index = Some(new_index);
         self.command_buffer = self.command_history[new_index].clone();
     }
-    
+
     pub fn history_down(&mut self) {
         if self.command_history.is_empty() {
             return;
         }
-        
+
         match self.history_index {
             None => {}
             Some(i) if i >= self.command_history.len() - 1 => {
@@ -253,36 +215,32 @@ impl UIState {
             }
         }
     }
-    
+
     pub fn get_command_suggestions(&self, prefix: &str) -> Vec<String> {
         let mut suggestions = Vec::new();
-        
+
         // Built-in commands
         let commands = vec![
-            "w", "q", "wq", "q!", "e", "help", "set", "vsplit", "split",
-            "tabnew", "tabnext", "tabprev", "buffer", "bnext", "bprev"
+            "w", "q", "wq", "q!", "e", "help", "set", "vsplit", "split", "tabnew", "tabnext",
+            "tabprev", "buffer", "bnext", "bprev",
         ];
-        
+
         for cmd in commands {
             if cmd.starts_with(prefix) {
                 suggestions.push(cmd.to_string());
             }
         }
-        
+
         // Add from history
         for cmd in &self.command_history {
             if cmd.starts_with(prefix) && !suggestions.contains(cmd) {
                 suggestions.push(cmd.clone());
             }
         }
-        
+
         suggestions.sort();
         suggestions.dedup();
         suggestions
-    }
-
-    pub fn get_status_manager(&self) -> &StatusManager {
-        &self.status_manager
     }
 }
 
@@ -309,23 +267,23 @@ mod tests {
     #[test]
     fn test_mode_transitions() {
         let mut state = UIState::new();
-        
+
         // Test insert mode
         state.enter_insert_mode();
         assert!(matches!(state.mode, Mode::Insert));
         assert_eq!(state.status_message, "-- INSERT --");
-        
+
         // Test normal mode
         state.enter_normal_mode();
         assert!(matches!(state.mode, Mode::Normal));
         assert_eq!(state.status_message, "");
-        
+
         // Test command mode
         state.enter_command_mode();
         assert!(matches!(state.mode, Mode::Command));
         assert_eq!(state.status_message, ":");
         assert_eq!(state.command_buffer, "");
-        
+
         // Test search mode
         state.enter_search_mode();
         assert!(matches!(state.mode, Mode::Command));
@@ -336,13 +294,13 @@ mod tests {
     #[test]
     fn test_help_toggle() {
         let mut state = UIState::new();
-        
+
         assert!(!state.is_help_shown());
-        
+
         state.toggle_help();
         assert!(state.is_help_shown());
         assert!(matches!(state.mode, Mode::Help));
-        
+
         state.toggle_help();
         assert!(!state.is_help_shown());
         assert!(matches!(state.mode, Mode::Normal));
@@ -351,14 +309,14 @@ mod tests {
     #[test]
     fn test_command_buffer_operations() {
         let mut state = UIState::new();
-        
+
         state.push_to_command_buffer('w');
         state.push_to_command_buffer('q');
         assert_eq!(state.command_buffer, "wq");
-        
+
         state.pop_from_command_buffer();
         assert_eq!(state.command_buffer, "w");
-        
+
         state.clear_command_buffer();
         assert_eq!(state.command_buffer, "");
     }
@@ -366,24 +324,24 @@ mod tests {
     #[test]
     fn test_quit_operations() {
         let mut state = UIState::new();
-        
+
         assert!(!state.should_quit());
-        
+
         state.quit();
         assert!(state.should_quit());
-        
-        state.cancel_quit();
+
+        state.should_quit = false;
         assert!(!state.should_quit());
     }
 
     #[test]
     fn test_status_message() {
         let mut state = UIState::new();
-        
-        state.set_status_message("Test message".to_string());
+
+        state.set_info_message("Test message".to_string());
         assert_eq!(state.get_status_message(), "Test message");
-        
-        state.clear_status_message();
+
+        state.status_message.clear();
         assert_eq!(state.get_status_message(), "");
     }
 }

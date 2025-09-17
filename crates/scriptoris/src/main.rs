@@ -3,8 +3,9 @@ mod command_processor;
 mod config;
 mod editor;
 mod enhanced_ui;
-mod highlight;
 mod file_manager;
+mod highlight;
+mod session_manager;
 mod status_manager;
 mod ui;
 mod ui_state;
@@ -55,11 +56,9 @@ async fn main() -> Result<()> {
 
 async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: app::App) -> Result<()> {
     loop {
-        terminal.draw(|f| {
-            match app.config.ui_mode {
-                config::UIMode::Enhanced => enhanced_ui::EnhancedUI::draw(f, &mut app),
-                config::UIMode::Standard => ui::draw(f, &mut app),
-            }
+        terminal.draw(|f| match app.config.ui_mode {
+            config::UIMode::Enhanced => enhanced_ui::EnhancedUI::draw(f, &mut app),
+            config::UIMode::Standard => ui::draw(f, &mut app),
         })?;
 
         // Update status messages (handle auto-expiring messages)
@@ -73,18 +72,26 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: app::App) -> R
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 // Handle Ctrl+C as emergency exit
-                if key.code == KeyCode::Char('c') && key.modifiers.contains(event::KeyModifiers::CONTROL) {
+                if key.code == KeyCode::Char('c')
+                    && key.modifiers.contains(event::KeyModifiers::CONTROL)
+                {
                     if app.is_modified() {
                         // Prompt to save before exiting
-                        app.ui_state.set_warning_message("Save changes before exit? (y/n/c): ".to_string());
+                        app.ui_state
+                            .set_warning_message("Save changes before exit? (y/n/c): ".to_string());
                         app.set_mode(app::Mode::SavePrompt);
                     } else {
                         break;
                     }
-                } else if key.code == KeyCode::Char('x') && key.modifiers.contains(event::KeyModifiers::CONTROL) {
+                } else if key.code == KeyCode::Char('x')
+                    && key.modifiers.contains(event::KeyModifiers::CONTROL)
+                {
                     // Ctrl+X for nano-like users - redirect to vim :q
                     if app.is_modified() {
-                        app.ui_state.set_info_message("Save changes? (:wq to save and quit, :q! to quit without saving)".to_string());
+                        app.ui_state.set_info_message(
+                            "Save changes? (:wq to save and quit, :q! to quit without saving)"
+                                .to_string(),
+                        );
                     } else {
                         app.quit();
                     }

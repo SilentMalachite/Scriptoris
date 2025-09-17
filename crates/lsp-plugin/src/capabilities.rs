@@ -150,14 +150,12 @@ pub fn get_server_capabilities() -> ServerCapabilities {
                 resolve_provider: Some(true),
             },
         ))),
-        diagnostic_provider: Some(DiagnosticServerCapabilities::Options(
-            DiagnosticOptions {
-                identifier: Some("scriptoris".to_string()),
-                inter_file_dependencies: true,
-                workspace_diagnostics: true,
-                work_done_progress_options: WorkDoneProgressOptions::default(),
-            },
-        )),
+        diagnostic_provider: Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
+            identifier: Some("scriptoris".to_string()),
+            inter_file_dependencies: true,
+            workspace_diagnostics: true,
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        })),
         workspace_symbol_provider: Some(OneOf::Left(true)),
         workspace: Some(WorkspaceServerCapabilities {
             workspace_folders: Some(WorkspaceFoldersServerCapabilities {

@@ -21,14 +21,10 @@ impl FileManager {
         self.current_path.as_ref()
     }
 
-    pub fn set_current_file(&mut self, path: PathBuf) {
-        self.current_path = Some(path);
-    }
-
     pub fn is_readonly(&self) -> bool {
         self.is_readonly
     }
-    
+
     pub fn has_file(&self) -> bool {
         self.current_path.is_some()
     }
@@ -40,7 +36,7 @@ impl FileManager {
         } else {
             self.is_readonly = false;
         }
-        
+
         let content = fs::read_to_string(&path).await?;
         self.current_path = Some(path);
         Ok(content)
@@ -61,6 +57,7 @@ impl FileManager {
         let content = editor.get_content();
         fs::write(&path, content).await?;
         self.current_path = Some(path);
+        self.is_readonly = false;
         editor.mark_saved();
         Ok(format!("Wrote {} lines", editor.line_count()))
     }
@@ -69,8 +66,8 @@ impl FileManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[tokio::test]
     async fn test_file_manager_creation() {
@@ -83,17 +80,17 @@ mod tests {
     async fn test_open_and_save_file() {
         let mut temp_file = NamedTempFile::new().unwrap();
         writeln!(temp_file, "Hello World\nTest content").unwrap();
-        
+
         let mut fm = FileManager::new();
         let mut editor = Editor::new();
-        
+
         // Test opening file
         let result = fm.open_file(temp_file.path().to_path_buf()).await;
         assert!(result.is_ok());
         let content = result.unwrap();
         editor.set_content(content);
         assert!(fm.has_file());
-        
+
         // Test saving file
         editor.insert_char('!');
         let result = fm.save_file(&mut editor).await;
@@ -106,13 +103,15 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let mut fm = FileManager::new();
         let mut editor = Editor::new();
-        
+
         editor.insert_char('T');
         editor.insert_char('e');
         editor.insert_char('s');
         editor.insert_char('t');
-        
-        let result = fm.save_file_as(temp_file.path().to_path_buf(), &mut editor).await;
+
+        let result = fm
+            .save_file_as(temp_file.path().to_path_buf(), &mut editor)
+            .await;
         assert!(result.is_ok());
         assert!(fm.has_file());
         assert!(!editor.is_modified());

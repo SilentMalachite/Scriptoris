@@ -16,9 +16,7 @@ pub fn sanitize_with_options(html: &str, allow_math_classes: bool) -> String {
             .clean(html)
             .to_string()
     } else {
-        create_secure_sanitizer()
-            .clean(html)
-            .to_string()
+        create_secure_sanitizer().clean(html).to_string()
     }
 }
 

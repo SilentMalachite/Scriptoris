@@ -1,5 +1,4 @@
 use anyhow::Result;
-use async_trait::async_trait;
 use lsp_types::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -7,17 +6,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-mod client;
-mod server;
-mod document;
 mod capabilities;
+mod client;
+mod document;
 mod plugin;
+mod server;
 
-pub use client::LspClient;
-pub use server::LspServer;
-pub use document::Document;
 pub use capabilities::get_server_capabilities;
+pub use client::LspClient;
+pub use document::Document;
 pub use plugin::ScriptorisLspPlugin;
+pub use server::LspServer;
 
 // LSPプラグイン設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,45 +40,65 @@ pub struct ServerConfig {
 impl Default for LspConfig {
     fn default() -> Self {
         let mut servers = HashMap::new();
-        
+
         // Rust Analyzer
-        servers.insert("rust-analyzer".to_string(), ServerConfig {
-            command: "rust-analyzer".to_string(),
-            args: vec![],
-            filetypes: vec!["rust".to_string(), "rs".to_string()],
-            root_markers: vec!["Cargo.toml".to_string()],
-            initialization_options: None,
-            settings: Some(serde_json::json!({
-                "rust-analyzer": {
-                    "cargo": {
-                        "allFeatures": true
-                    },
-                    "procMacro": {
-                        "enable": true
+        servers.insert(
+            "rust-analyzer".to_string(),
+            ServerConfig {
+                command: "rust-analyzer".to_string(),
+                args: vec![],
+                filetypes: vec!["rust".to_string(), "rs".to_string()],
+                root_markers: vec!["Cargo.toml".to_string()],
+                initialization_options: None,
+                settings: Some(serde_json::json!({
+                    "rust-analyzer": {
+                        "cargo": {
+                            "allFeatures": true
+                        },
+                        "procMacro": {
+                            "enable": true
+                        }
                     }
-                }
-            })),
-        });
+                })),
+            },
+        );
 
         // TypeScript Language Server
-        servers.insert("typescript-language-server".to_string(), ServerConfig {
-            command: "typescript-language-server".to_string(),
-            args: vec!["--stdio".to_string()],
-            filetypes: vec!["typescript".to_string(), "javascript".to_string(), "ts".to_string(), "js".to_string(), "tsx".to_string(), "jsx".to_string()],
-            root_markers: vec!["package.json".to_string(), "tsconfig.json".to_string()],
-            initialization_options: None,
-            settings: None,
-        });
+        servers.insert(
+            "typescript-language-server".to_string(),
+            ServerConfig {
+                command: "typescript-language-server".to_string(),
+                args: vec!["--stdio".to_string()],
+                filetypes: vec![
+                    "typescript".to_string(),
+                    "javascript".to_string(),
+                    "ts".to_string(),
+                    "js".to_string(),
+                    "tsx".to_string(),
+                    "jsx".to_string(),
+                ],
+                root_markers: vec!["package.json".to_string(), "tsconfig.json".to_string()],
+                initialization_options: None,
+                settings: None,
+            },
+        );
 
         // Python Language Server
-        servers.insert("pylsp".to_string(), ServerConfig {
-            command: "pylsp".to_string(),
-            args: vec![],
-            filetypes: vec!["python".to_string(), "py".to_string()],
-            root_markers: vec!["setup.py".to_string(), "pyproject.toml".to_string(), "requirements.txt".to_string()],
-            initialization_options: None,
-            settings: None,
-        });
+        servers.insert(
+            "pylsp".to_string(),
+            ServerConfig {
+                command: "pylsp".to_string(),
+                args: vec![],
+                filetypes: vec!["python".to_string(), "py".to_string()],
+                root_markers: vec![
+                    "setup.py".to_string(),
+                    "pyproject.toml".to_string(),
+                    "requirements.txt".to_string(),
+                ],
+                initialization_options: None,
+                settings: None,
+            },
+        );
 
         Self {
             servers,
@@ -119,18 +138,17 @@ impl LspPlugin {
 
     pub async fn start_server(&self, server_name: &str) -> Result<()> {
         let config = self.config.read().await;
-        let server_config = config.servers.get(server_name)
+        let server_config = config
+            .servers
+            .get(server_name)
             .ok_or_else(|| anyhow::anyhow!("Server {} not configured", server_name))?;
-        
-        let client = LspClient::new(
-            server_config.command.clone(),
-            server_config.args.clone(),
-        ).await?;
-        
+
+        let client =
+            LspClient::new(server_config.command.clone(), server_config.args.clone()).await?;
+
         // Initialize
         let init_params = InitializeParams {
             process_id: Some(std::process::id()),
-            root_path: None,
             root_uri: None,
             initialization_options: server_config.initialization_options.clone(),
             capabilities: self.get_client_capabilities(),
@@ -141,15 +159,18 @@ impl LspPlugin {
                 version: Some("0.1.0".to_string()),
             }),
             locale: None,
-
+            ..Default::default()
         };
-        
+
         client.initialize(init_params).await?;
         client.initialized().await?;
-        
-        self.clients.write().await.insert(server_name.to_string(), Arc::new(client));
+
+        self.clients
+            .write()
+            .await
+            .insert(server_name.to_string(), Arc::new(client));
         *self.current_server.write().await = Some(server_name.to_string());
-        
+
         Ok(())
     }
 
@@ -161,13 +182,17 @@ impl LspPlugin {
         Ok(())
     }
 
-    pub async fn open_document(&self, path: PathBuf, content: String, language_id: String) -> Result<()> {
-        let uri = Url::from_file_path(&path)
-            .map_err(|_| anyhow::anyhow!("Invalid file path"))?;
-        
+    pub async fn open_document(
+        &self,
+        path: PathBuf,
+        content: String,
+        language_id: String,
+    ) -> Result<()> {
+        let uri = Url::from_file_path(&path).map_err(|_| anyhow::anyhow!("Invalid file path"))?;
+
         let document = Document::new(uri.clone(), content.clone(), language_id.clone(), 0);
         self.documents.write().await.insert(path.clone(), document);
-        
+
         // Find appropriate server
         let config = self.config.read().await;
         for (server_name, server_config) in &config.servers {
@@ -186,26 +211,27 @@ impl LspPlugin {
                 }
             }
         }
-        
+
         Ok(())
     }
 
-    pub async fn update_document(&self, path: PathBuf, content: String, version: i32) -> Result<()> {
-        let uri = Url::from_file_path(&path)
-            .map_err(|_| anyhow::anyhow!("Invalid file path"))?;
-        
-        if let Some(mut document) = self.documents.write().await.get_mut(&path) {
+    pub async fn update_document(
+        &self,
+        path: PathBuf,
+        content: String,
+        version: i32,
+    ) -> Result<()> {
+        let uri = Url::from_file_path(&path).map_err(|_| anyhow::anyhow!("Invalid file path"))?;
+
+        if let Some(document) = self.documents.write().await.get_mut(&path) {
             document.update(content.clone(), version);
         }
-        
+
         // Notify server
         if let Some(server_name) = self.current_server.read().await.as_ref() {
             if let Some(client) = self.clients.read().await.get(server_name) {
                 let params = DidChangeTextDocumentParams {
-                    text_document: VersionedTextDocumentIdentifier {
-                        uri,
-                        version,
-                    },
+                    text_document: VersionedTextDocumentIdentifier { uri, version },
                     content_changes: vec![TextDocumentContentChangeEvent {
                         range: None,
                         range_length: None,
@@ -215,14 +241,18 @@ impl LspPlugin {
                 client.did_change(params).await?;
             }
         }
-        
+
         Ok(())
     }
 
-    pub async fn get_completions(&self, path: PathBuf, line: u32, character: u32) -> Result<Vec<CompletionItem>> {
-        let uri = Url::from_file_path(&path)
-            .map_err(|_| anyhow::anyhow!("Invalid file path"))?;
-        
+    pub async fn get_completions(
+        &self,
+        path: PathBuf,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<CompletionItem>> {
+        let uri = Url::from_file_path(&path).map_err(|_| anyhow::anyhow!("Invalid file path"))?;
+
         if let Some(server_name) = self.current_server.read().await.as_ref() {
             if let Some(client) = self.clients.read().await.get(server_name) {
                 let params = CompletionParams {
@@ -234,7 +264,7 @@ impl LspPlugin {
                     partial_result_params: PartialResultParams::default(),
                     context: None,
                 };
-                
+
                 let response = client.completion(params).await?;
                 match response {
                     Some(CompletionResponse::Array(items)) => Ok(items),
@@ -249,10 +279,14 @@ impl LspPlugin {
         }
     }
 
-    pub async fn get_hover(&self, path: PathBuf, line: u32, character: u32) -> Result<Option<Hover>> {
-        let uri = Url::from_file_path(&path)
-            .map_err(|_| anyhow::anyhow!("Invalid file path"))?;
-        
+    pub async fn get_hover(
+        &self,
+        path: PathBuf,
+        line: u32,
+        character: u32,
+    ) -> Result<Option<Hover>> {
+        let uri = Url::from_file_path(&path).map_err(|_| anyhow::anyhow!("Invalid file path"))?;
+
         if let Some(server_name) = self.current_server.read().await.as_ref() {
             if let Some(client) = self.clients.read().await.get(server_name) {
                 let params = HoverParams {
@@ -262,7 +296,7 @@ impl LspPlugin {
                     },
                     work_done_progress_params: WorkDoneProgressParams::default(),
                 };
-                
+
                 client.hover(params).await
             } else {
                 Ok(None)
@@ -272,10 +306,14 @@ impl LspPlugin {
         }
     }
 
-    pub async fn goto_definition(&self, path: PathBuf, line: u32, character: u32) -> Result<Option<GotoDefinitionResponse>> {
-        let uri = Url::from_file_path(&path)
-            .map_err(|_| anyhow::anyhow!("Invalid file path"))?;
-        
+    pub async fn goto_definition(
+        &self,
+        path: PathBuf,
+        line: u32,
+        character: u32,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = Url::from_file_path(&path).map_err(|_| anyhow::anyhow!("Invalid file path"))?;
+
         if let Some(server_name) = self.current_server.read().await.as_ref() {
             if let Some(client) = self.clients.read().await.get(server_name) {
                 let params = GotoDefinitionParams {
@@ -286,7 +324,7 @@ impl LspPlugin {
                     work_done_progress_params: WorkDoneProgressParams::default(),
                     partial_result_params: PartialResultParams::default(),
                 };
-                
+
                 client.goto_definition(params).await
             } else {
                 Ok(None)
@@ -297,7 +335,9 @@ impl LspPlugin {
     }
 
     pub async fn get_diagnostics(&self, uri: &Url) -> Vec<Diagnostic> {
-        self.diagnostics.read().await
+        self.diagnostics
+            .read()
+            .await
             .get(uri)
             .cloned()
             .unwrap_or_default()
@@ -377,7 +417,10 @@ impl LspPlugin {
                     completion_item: Some(CompletionItemCapability {
                         snippet_support: Some(true),
                         commit_characters_support: Some(true),
-                        documentation_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
+                        documentation_format: Some(vec![
+                            MarkupKind::Markdown,
+                            MarkupKind::PlainText,
+                        ]),
                         deprecated_support: Some(true),
                         preselect_support: Some(true),
                         tag_support: None,
@@ -419,7 +462,10 @@ impl LspPlugin {
                 signature_help: Some(SignatureHelpClientCapabilities {
                     dynamic_registration: Some(false),
                     signature_information: Some(SignatureInformationSettings {
-                        documentation_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
+                        documentation_format: Some(vec![
+                            MarkupKind::Markdown,
+                            MarkupKind::PlainText,
+                        ]),
                         parameter_information: Some(ParameterInformationSettings {
                             label_offset_support: Some(true),
                         }),

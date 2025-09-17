@@ -3,11 +3,13 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 lazy_static! {
-    static ref MATH_INLINE: Regex = Regex::new(r"\$([^\$
-]+)\$")
-        .expect("Invalid MATH_INLINE regex pattern");
-    static ref MATH_BLOCK: Regex = Regex::new(r"\$\$([^\$]+)\$\$")
-        .expect("Invalid MATH_BLOCK regex pattern");
+    static ref MATH_INLINE: Regex = Regex::new(
+        r"\$([^\$
+]+)\$"
+    )
+    .expect("Invalid MATH_INLINE regex pattern");
+    static ref MATH_BLOCK: Regex =
+        Regex::new(r"\$\$([^\$]+)\$\$").expect("Invalid MATH_BLOCK regex pattern");
     static ref MERMAID_BLOCK: Regex =
         Regex::new(r#"<pre><code class="language-mermaid">([^<]*)</code></pre>"#)
             .expect("Invalid MERMAID_BLOCK regex pattern");
@@ -37,19 +39,16 @@ fn create_comrak_options() -> ComrakOptions<'static> {
     opt.parse.smart = true;
 
     // Render options - SECURITY: Enable safe HTML rendering
-    opt.render.unsafe_ = false;  // Disable unsafe HTML execution
-    opt.render.escape = true;    // Enable HTML escaping to prevent XSS
+    opt.render.unsafe_ = false; // Disable unsafe HTML execution
+    opt.render.escape = true; // Enable HTML escaping to prevent XSS
 
     opt
 }
 
 pub fn patch_math_blocks(html: &str) -> String {
     // Process block math first ($$...$$)
-    let result = MATH_BLOCK
-        .replace_all(
-            html,
-            r#"<div class="math-block" data-math="$1">$$1$</div>"#,
-        );
+    let result =
+        MATH_BLOCK.replace_all(html, r#"<div class="math-block" data-math="$1">$$1$</div>"#);
 
     // Process inline math ($...$)
     MATH_INLINE

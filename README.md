@@ -5,8 +5,8 @@
 [![Build Status](https://github.com/yourusername/scriptoris/workflows/CI/badge.svg)](https://github.com/yourusername/scriptoris/actions)
 [![Tests](https://img.shields.io/badge/tests-56_passing-brightgreen.svg)](#)
 
-> A powerful, Vim-inspired terminal-based Markdown editor built with Rust. 
-> Write documentation faster with advanced features like LSP support, multiple buffers, split windows, and session management.
+> A focused, Vim-inspired terminal Markdown editor built with Rust. 
+> Optimised for fast note taking and documentation with a lean, easy-to-understand codebase.
 
 ![Scriptoris Demo](assets/demo.gif)
 *Coming soon: Demo gif showing key features*
@@ -15,28 +15,20 @@
 
 ### 🚀 Core Editor Features
 - **Vim-style keybindings** - Familiar modal editing (Normal/Insert/Visual/Command modes)
-- **Multiple buffers/tabs** - Edit multiple files simultaneously with `:b`, `:bn`, `:bp`
-- **Split windows** - Horizontal/vertical splits with `:split`, `:vsplit`, and `Ctrl+W` navigation
-- **Session management** - Save and restore your workspace with `:session save/load`
+- **Powerful text engine** - Ropey-backed buffer for smooth editing of large Markdown files
+- **Search command** - `:search <term>` quickly moves the cursor to matches in the current file
+- **Markdown aware UI** - Syntax-highlighted viewport using syntect + ratatui
 - **Unicode support** - Full Japanese and international character support
 
 ### 🔧 Advanced Features
-- **LSP Integration (Prototype)** - Basic demo server with sample responses:
-  - Sample code completion (`Ctrl+Space`)
-  - Sample hover documentation (`Ctrl+K`)
-  - Diagnostics currently empty (no real validation)
-  - Go to definition and references are not implemented yet
-- **Plugin Architecture** - Extensible plugin system with async support
-- **Efficient text handling** - Powered by Ropey for large file performance
+- **Prototype LSP integration** *(optional)* - Example plugin demonstrating completion & hover hooks
+- **Extensible architecture** - Traits for future plugin loading (currently disabled by default)
+- **Markdown processing library** - `mdcore` crate for sanitised HTML export and utilities
 
 ### 📝 Markdown & Highlighting
-- **GitHub Flavored Markdown** (GFM) with:
-  - Tables, footnotes, strikethrough
-  - Task lists and checkboxes
-  - Code blocks with syntax highlighting
-- **Syntax highlighting** via syntect, with Markdown syntax prioritized for `.md`
-- **HTML export** with sanitization (mdcore crate)
-- **Live syntax awareness** for better editing experience
+- **GitHub Flavored Markdown** (GFM) support in the renderer tests
+- **Syntax highlighting** via syntect with Markdown-first heuristics
+- **HTML export** and sanitisation powered by the companion `mdcore` crate
 
 ### 🎨 User Experience
 - **Cross-platform** - Works on Windows, macOS, and Linux
@@ -72,8 +64,8 @@ scriptoris
 # Open an existing file
 scriptoris README.md
 
-# Open multiple files
-scriptoris file1.md file2.md file3.md
+# (Planned) Multi-file support
+# Current builds focus on a single active buffer.
 ```
 
 ## 🎯 Quick Reference
@@ -87,51 +79,31 @@ scriptoris file1.md file2.md file3.md
 | `:` | Enter command mode | Normal |
 | `Esc` | Return to normal mode | Any |
 
-### Buffer Management
+### Command Palette (Normal/Command Modes)
 | Command | Description |
 |---------|-------------|
-| `:e filename` | Open file in new buffer |
-| `:b N` | Switch to buffer N |
-| `:bn` / `:bp` | Next/previous buffer |
-| `:ls` | List all buffers |
-| `:bd` | Close current buffer |
+| `:w` | Save to current file |
+| `:w <path>` | Save buffer as `<path>` |
+| `:wq` | Save and quit |
+| `:q` | Quit (fails if buffer is modified) |
+| `:q!` | Force quit discarding changes |
+| `:e <path>` | Load a file into the current buffer |
+| `:search <term>` | Jump cursor to the next occurrence of `<term>` |
+| `:set theme <name>` | Change the active syntax highlighting theme |
 
-### Window Management
-| Key/Command | Action |
-|-------------|--------|
-| `:split` | Horizontal split |
-| `:vsplit` | Vertical split |
-| `Ctrl+W h/j/k/l` | Navigate between windows |
-
-### LSP Features
-| Key | Action |
-|-----|--------|
-| `Ctrl+Space` | Trigger sample completion (prototype) |
-| `Ctrl+K` | Show sample hover information (prototype) |
-
-Note: Go to definition and other LSP features are not implemented yet in the current prototype.
-
-### Session Management
-### Theming & Settings
-
-| Command | Description |
-|---------|-------------|
-| `:set theme <name>` | Change syntax theme (e.g. `base16-ocean.dark`). Persists to config.
-
-| Command | Description |
-|---------|-------------|
-| `:session save name` | Save current session |
-| `:session load name` | Load saved session |
-| `:session list` | List saved sessions |
+### Experimental LSP Plugin
+- The `crates/lsp-plugin` crate bundles a demo client/server showcasing how completions and hover
+  information could be wired. It is **not** connected to real language servers yet, but serves as a
+  reference for contributors interested in extending Scriptoris.
 
 ## 📁 Project Structure
 
 ```
 scriptoris/
 ├── crates/
-│   ├── scriptoris/     # Main TUI application
-│   ├── lsp-plugin/     # Language Server Protocol integration
-│   └── mdcore/         # Markdown processing library
+│   ├── scriptoris/     # Main TUI application (this crate)
+│   ├── lsp-plugin/     # Prototype LSP client/server for future integration
+│   └── mdcore/         # Markdown processing & sanitisation helpers
 ├── assets/             # Static assets and themes
 ├── .github/            # GitHub Actions and templates
 └── README.md           # This file

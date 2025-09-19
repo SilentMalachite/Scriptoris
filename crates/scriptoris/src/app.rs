@@ -1,7 +1,10 @@
+//! アプリケーション全体の状態とキー操作を扱うモジュール。
+//! バッファやウィンドウ、マクロ、UI 状態などエディタの中枢がここに集約されます。
+
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::command_processor::CommandProcessor;
+use crate::command_processor::{BufferCommand, CommandAction, CommandProcessor, WindowCommand};
 use crate::config::Config;
 use crate::editor::Editor;
 use crate::file_manager::FileManager;
@@ -57,6 +60,7 @@ impl Buffer {
 pub struct BufferManager {
     pub buffers: Vec<Buffer>,
     current_buffer: usize,
+    next_buffer_id: usize,
 }
 
 impl BufferManager {
@@ -64,10 +68,17 @@ impl BufferManager {
         let mut manager = Self {
             buffers: Vec::new(),
             current_buffer: 0,
+            next_buffer_id: 0,
         };
-        // デフォルトバッファを作成
-        manager.buffers.push(Buffer::new(0));
+        manager.create_buffer();
         manager
+    }
+
+    fn create_buffer(&mut self) -> usize {
+        let id = self.next_buffer_id;
+        self.next_buffer_id += 1;
+        self.buffers.push(Buffer::new(id));
+        self.buffers.len() - 1
     }
 
     pub fn get_current(&self) -> &Buffer {
@@ -77,32 +88,85 @@ impl BufferManager {
     pub fn get_current_mut(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current_buffer]
     }
-}
 
-// ウィンドウ管理
-#[derive(Clone, Debug)]
-pub enum Split {
-    Leaf { buffer_id: usize },
-}
+    pub fn current_buffer_id(&self) -> usize {
+        self.get_current().id
+    }
 
-#[derive(Clone, Debug)]
-pub struct Window {
-    pub id: usize,
-    pub split: Split,
-}
+    pub fn buffers(&self) -> &[Buffer] {
+        &self.buffers
+    }
 
-impl Window {
-    pub fn new_leaf(id: usize, buffer_id: usize) -> Self {
-        Self {
-            id,
-            split: Split::Leaf { buffer_id },
+    pub fn find_index_by_id(&self, id: usize) -> Option<usize> {
+        self.buffers.iter().position(|buffer| buffer.id == id)
+    }
+
+    pub fn current_index(&self) -> usize {
+        self.current_buffer
+    }
+
+    pub fn next_buffer(&mut self) -> Option<&mut Buffer> {
+        if self.buffers.len() <= 1 {
+            return None;
+        }
+        self.current_buffer = (self.current_buffer + 1) % self.buffers.len();
+        Some(&mut self.buffers[self.current_buffer])
+    }
+
+    pub fn prev_buffer(&mut self) -> Option<&mut Buffer> {
+        if self.buffers.len() <= 1 {
+            return None;
+        }
+        if self.current_buffer == 0 {
+            self.current_buffer = self.buffers.len() - 1;
+        } else {
+            self.current_buffer -= 1;
+        }
+        Some(&mut self.buffers[self.current_buffer])
+    }
+
+    pub fn delete_current(&mut self) -> Option<usize> {
+        if self.buffers.len() <= 1 {
+            let buffer = &mut self.buffers[self.current_buffer];
+            buffer.content = Editor::default();
+            buffer.file_path = None;
+            buffer.readonly = false;
+            None
+        } else {
+            let removed = self.buffers.remove(self.current_buffer);
+            if self.current_buffer >= self.buffers.len() {
+                self.current_buffer = self.buffers.len().saturating_sub(1);
+            }
+            Some(removed.id)
         }
     }
 }
 
+impl Default for BufferManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ウィンドウ管理
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowSplitKind {
+    None,
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Clone, Debug)]
+pub struct WindowPane {
+    pub id: usize,
+    pub buffer_id: usize,
+}
+
 pub struct WindowManager {
-    root: Window,
+    panes: Vec<WindowPane>,
     pub current_window_id: usize,
+    next_window_id: usize,
+    split: WindowSplitKind,
 }
 
 // プラグインシステム
@@ -168,17 +232,84 @@ impl PluginManager {
     }
 }
 
+impl Default for PluginManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WindowManager {
     pub fn new(buffer_id: usize) -> Self {
         Self {
-            root: Window::new_leaf(0, buffer_id),
+            panes: vec![WindowPane { id: 0, buffer_id }],
             current_window_id: 0,
+            next_window_id: 1,
+            split: WindowSplitKind::None,
         }
     }
 
-    pub fn get_root(&self) -> &Window {
-        &self.root
+    pub fn panes(&self) -> &[WindowPane] {
+        &self.panes
     }
+
+    pub fn panes_mut(&mut self) -> &mut [WindowPane] {
+        &mut self.panes
+    }
+
+    pub fn split_horizontal(&mut self, buffer_id: usize) {
+        if self.panes.len() < 2 {
+            self.panes.push(WindowPane {
+                id: self.next_window_id,
+                buffer_id,
+            });
+            self.next_window_id += 1;
+        } else if let Some(pane) = self
+            .panes
+            .iter_mut()
+            .find(|pane| pane.id != self.current_window_id)
+        {
+            pane.buffer_id = buffer_id;
+        }
+        self.split = WindowSplitKind::Horizontal;
+    }
+
+    pub fn split_vertical(&mut self, buffer_id: usize) {
+        if self.panes.len() < 2 {
+            self.panes.push(WindowPane {
+                id: self.next_window_id,
+                buffer_id,
+            });
+            self.next_window_id += 1;
+        } else if let Some(pane) = self
+            .panes
+            .iter_mut()
+            .find(|pane| pane.id != self.current_window_id)
+        {
+            pane.buffer_id = buffer_id;
+        }
+        self.split = WindowSplitKind::Vertical;
+    }
+
+    pub fn set_buffer_for_current(&mut self, buffer_id: usize) {
+        if let Some(pane) = self
+            .panes
+            .iter_mut()
+            .find(|pane| pane.id == self.current_window_id)
+        {
+            pane.buffer_id = buffer_id;
+        }
+    }
+
+    pub fn split_kind(&self) -> WindowSplitKind {
+        self.split
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum UiMessageKind {
+    Info,
+    Success,
+    Warning,
 }
 
 impl App {
@@ -186,11 +317,12 @@ impl App {
         let config = Config::load().await?;
         let buffer_manager = BufferManager::new();
         let initial_buffer_id = buffer_manager.get_current().id;
+        let command_processor = CommandProcessor::new()?;
         Ok(Self {
             config,
             ui_state: UIState::new(),
             file_manager: FileManager::new(),
-            command_processor: CommandProcessor::new(),
+            command_processor,
             buffer_manager,
             window_manager: WindowManager::new(initial_buffer_id),
             highlighter_cache: None,
@@ -215,15 +347,21 @@ impl App {
     }
 
     pub fn get_highlighter(&mut self) -> &crate::highlight::Highlighter {
-        if self.highlighter_cache.is_none()
-            || self.highlighter_cache.as_ref().unwrap().theme_name()
-                != &self.config.theme.syntax_theme
-        {
+        let needs_refresh = self
+            .highlighter_cache
+            .as_ref()
+            .map(|cache| cache.theme_name() != self.config.theme.syntax_theme.as_str())
+            .unwrap_or(true);
+
+        if needs_refresh {
             self.highlighter_cache = Some(crate::highlight::Highlighter::new(
                 &self.config.theme.syntax_theme,
             ));
         }
-        self.highlighter_cache.as_ref().unwrap()
+
+        self.highlighter_cache
+            .as_ref()
+            .expect("Highlighter cache should be initialised")
     }
 
     // Public getters for UI and main.rs
@@ -281,7 +419,7 @@ impl App {
     fn handle_normal_mode_key(&mut self, key: KeyEvent) -> Result<()> {
         // Record macro if recording
         if self.macro_recording && key.code != KeyCode::Char('q') {
-            self.macro_keys.push(key.clone());
+            self.macro_keys.push(key);
         }
 
         // Clear last_key if it's not 'd' and we're not pressing 'd'
@@ -385,7 +523,8 @@ impl App {
             // Paste
             KeyCode::Char('p') => {
                 self.get_current_editor_mut().paste();
-                self.ui_state.set_success_message("Text pasted".to_string());
+                self.ui_state
+                    .set_success_message("貼り付けました".to_string());
             }
 
             // Undo/Redo
@@ -429,7 +568,7 @@ impl App {
         if self.last_key == Some('d') {
             self.get_current_editor_mut().delete_line();
             self.ui_state
-                .set_success_message("Line deleted and yanked".to_string());
+                .set_success_message("行を削除してヤンクしました".to_string());
             self.last_key = None;
         } else {
             self.last_key = Some('d');
@@ -438,19 +577,21 @@ impl App {
 
     fn handle_undo(&mut self) {
         if self.get_current_editor_mut().undo() {
-            self.ui_state.set_success_message("Undone".to_string());
+            self.ui_state
+                .set_success_message("元に戻しました".to_string());
         } else {
             self.ui_state
-                .set_warning_message("Nothing to undo".to_string());
+                .set_warning_message("元に戻す操作はありません".to_string());
         }
     }
 
     fn handle_redo(&mut self) {
         if self.get_current_editor_mut().redo() {
-            self.ui_state.set_success_message("Redone".to_string());
+            self.ui_state
+                .set_success_message("やり直しました".to_string());
         } else {
             self.ui_state
-                .set_warning_message("Nothing to redo".to_string());
+                .set_warning_message("やり直す操作はありません".to_string());
         }
     }
 
@@ -477,14 +618,14 @@ impl App {
                 self.get_current_editor_mut().delete_selection();
                 self.ui_state.enter_normal_mode();
                 self.ui_state
-                    .set_success_message("Selection deleted and yanked".to_string());
+                    .set_success_message("選択範囲を削除してヤンクしました".to_string());
             }
             KeyCode::Char('y') => {
                 self.get_current_editor_mut().yank_selection();
                 self.get_current_editor_mut().clear_visual_selection();
                 self.ui_state.enter_normal_mode();
                 self.ui_state
-                    .set_success_message("Selection yanked".to_string());
+                    .set_success_message("選択範囲をヤンクしました".to_string());
             }
             KeyCode::Char('c') => {
                 self.get_current_editor_mut().delete_selection();
@@ -535,19 +676,28 @@ impl App {
                         .await
                 };
 
-                match command_result {
-                    Ok(message) => {
-                        if !message.is_empty() {
-                            // Determine message type based on content
-                            if message.contains("saved") || message.contains("Wrote") {
-                                self.ui_state.set_success_message(message);
-                            } else {
-                                self.ui_state.set_info_message(message);
-                            }
-                        }
+                let mut message_to_show: Option<(UiMessageKind, String)> = match command_result {
+                    Ok(message) if !message.is_empty() => {
+                        Some((classify_message(&message), message))
                     }
+                    Ok(_) => None,
                     Err(e) => {
                         self.ui_state.set_error_message(e.to_string());
+                        None
+                    }
+                };
+
+                if let Some(action) = self.command_processor.take_pending_action() {
+                    if let Some(action_message) = self.apply_command_action(action) {
+                        message_to_show = Some(action_message);
+                    }
+                }
+
+                if let Some((kind, message)) = message_to_show {
+                    match kind {
+                        UiMessageKind::Info => self.ui_state.set_info_message(message),
+                        UiMessageKind::Success => self.ui_state.set_success_message(message),
+                        UiMessageKind::Warning => self.ui_state.set_warning_message(message),
                     }
                 }
 
@@ -558,7 +708,8 @@ impl App {
             KeyCode::Esc => {
                 self.ui_state.clear_command_buffer();
                 self.ui_state.enter_normal_mode();
-                self.ui_state.set_info_message("Cancelled".to_string());
+                self.ui_state
+                    .set_info_message("キャンセルしました".to_string());
             }
             KeyCode::Up => {
                 // Navigate command history up
@@ -572,12 +723,15 @@ impl App {
                 // Command completion
                 let current = self.ui_state.get_command_buffer();
                 let suggestions = self.ui_state.get_command_suggestions(current);
-                if suggestions.len() == 1 {
-                    self.ui_state.set_command_buffer(suggestions[0].clone());
-                } else if suggestions.len() > 1 {
-                    // Show suggestions in status
-                    let msg = format!("Suggestions: {}", suggestions.join(", "));
-                    self.ui_state.set_info_message(msg);
+                match suggestions.len() {
+                    0 => {}
+                    1 => self
+                        .ui_state
+                        .set_command_buffer(suggestions[0].clone()),
+                    _ => {
+                        let msg = format!("候補: {}", suggestions.join(", "));
+                        self.ui_state.set_info_message(msg);
+                    }
                 }
             }
             KeyCode::Char(c) => {
@@ -625,7 +779,7 @@ impl App {
 
                 if let Err(e) = save_result {
                     self.ui_state
-                        .set_error_message(format!("Error saving: {}", e));
+                        .set_error_message(format!("保存中にエラーが発生しました: {}", e));
                     self.ui_state.enter_normal_mode();
                 } else {
                     self.refresh_current_buffer_metadata();
@@ -650,7 +804,7 @@ impl App {
         self.macro_register = Some(register);
         self.macro_keys.clear();
         self.ui_state
-            .set_info_message(format!("Recording macro to register '{}'", register));
+            .set_info_message(format!("レジスタ '{}' にマクロを記録中", register));
     }
 
     fn stop_macro_recording(&mut self) {
@@ -658,7 +812,7 @@ impl App {
             self.macro_registers
                 .insert(register, self.macro_keys.clone());
             self.ui_state
-                .set_success_message(format!("Macro recorded to register '{}'", register));
+                .set_success_message(format!("レジスタ '{}' にマクロを記録しました", register));
         }
         self.macro_recording = false;
         self.macro_register = None;
@@ -668,7 +822,7 @@ impl App {
     fn play_macro(&mut self, register: char) {
         if let Some(keys) = self.macro_registers.get(&register).cloned() {
             self.ui_state
-                .set_info_message(format!("Playing macro from register '{}'", register));
+                .set_info_message(format!("レジスタ '{}' のマクロを再生します", register));
             // Execute recorded keys
             for key in keys {
                 // Skip the macro recording keys themselves
@@ -684,10 +838,12 @@ impl App {
                 }
             }
             self.ui_state
-                .set_success_message("Macro playback complete".to_string());
+                .set_success_message("マクロの再生が完了しました".to_string());
         } else {
-            self.ui_state
-                .set_warning_message(format!("No macro in register '{}'", register));
+            self.ui_state.set_warning_message(format!(
+                "レジスタ '{}' にマクロは登録されていません",
+                register
+            ));
         }
     }
 
@@ -701,15 +857,148 @@ impl App {
             buffer.readonly = self.file_manager.is_readonly();
         }
     }
+
+    fn sync_file_manager_from_buffer(&mut self) {
+        let buffer = self.buffer_manager.get_current();
+        self.file_manager.current_path = buffer.file_path.clone();
+        self.file_manager.is_readonly = buffer.readonly;
+    }
+
+    fn apply_command_action(&mut self, action: CommandAction) -> Option<(UiMessageKind, String)> {
+        match action {
+            CommandAction::None => None,
+            CommandAction::Buffer(buffer_command) => match buffer_command {
+                BufferCommand::Next => {
+                    if self.buffer_manager.next_buffer().is_some() {
+                        let active_id = self.buffer_manager.current_buffer_id();
+                        self.window_manager.set_buffer_for_current(active_id);
+                        self.sync_file_manager_from_buffer();
+                        Some((
+                            UiMessageKind::Info,
+                            "次のバッファに切り替えました".to_string(),
+                        ))
+                    } else {
+                        Some((
+                            UiMessageKind::Warning,
+                            "切り替え可能なバッファがありません".to_string(),
+                        ))
+                    }
+                }
+                BufferCommand::Previous => {
+                    if self.buffer_manager.prev_buffer().is_some() {
+                        let active_id = self.buffer_manager.current_buffer_id();
+                        self.window_manager.set_buffer_for_current(active_id);
+                        self.sync_file_manager_from_buffer();
+                        Some((
+                            UiMessageKind::Info,
+                            "前のバッファに切り替えました".to_string(),
+                        ))
+                    } else {
+                        Some((
+                            UiMessageKind::Warning,
+                            "切り替え可能なバッファがありません".to_string(),
+                        ))
+                    }
+                }
+                BufferCommand::List => {
+                    let list = self
+                        .buffer_manager
+                        .buffers()
+                        .iter()
+                        .enumerate()
+                        .map(|(index, buffer)| {
+                            let marker = if index == self.buffer_manager.current_index() {
+                                "*"
+                            } else {
+                                " "
+                            };
+                            let name = buffer
+                                .file_path
+                                .as_ref()
+                                .and_then(|p| p.file_name())
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("[No Name]");
+                            format!("{}{}:{name}", marker, buffer.id)
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    Some((UiMessageKind::Info, format!("バッファ一覧: {list}")))
+                }
+                BufferCommand::DeleteCurrent => {
+                    let removed_id = self.buffer_manager.delete_current();
+                    let active_id = self.buffer_manager.current_buffer_id();
+                    self.window_manager.set_buffer_for_current(active_id);
+                    if let Some(old_id) = removed_id {
+                        for pane in self.window_manager.panes_mut() {
+                            if pane.buffer_id == old_id {
+                                pane.buffer_id = active_id;
+                            }
+                        }
+                    }
+                    self.sync_file_manager_from_buffer();
+                    if removed_id.is_some() {
+                        Some((
+                            UiMessageKind::Success,
+                            "現在のバッファを閉じました".to_string(),
+                        ))
+                    } else {
+                        Some((
+                            UiMessageKind::Warning,
+                            "最後のバッファを初期化しました".to_string(),
+                        ))
+                    }
+                }
+            },
+            CommandAction::Window(window_command) => match window_command {
+                WindowCommand::SplitHorizontal => {
+                    let buffer_id = self.buffer_manager.current_buffer_id();
+                    self.window_manager.split_horizontal(buffer_id);
+                    Some((UiMessageKind::Info, "水平分割を行いました".to_string()))
+                }
+                WindowCommand::SplitVertical => {
+                    let buffer_id = self.buffer_manager.current_buffer_id();
+                    self.window_manager.split_vertical(buffer_id);
+                    Some((UiMessageKind::Info, "垂直分割を行いました".to_string()))
+                }
+            },
+        }
+    }
+}
+
+fn classify_message(message: &str) -> UiMessageKind {
+    if message.contains("書き込みました") || message.contains("保存しました") {
+        UiMessageKind::Success
+    } else if message.contains("変更が保存されていません") {
+        UiMessageKind::Warning
+    } else {
+        UiMessageKind::Info
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::session_manager::SessionManager;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use std::sync::{Mutex, OnceLock};
+    use tempfile::TempDir;
+    use tokio::fs::try_exists;
 
     fn create_key_event(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn restore_env(name: &str, previous: Option<String>) {
+        if let Some(value) = previous {
+            std::env::set_var(name, value);
+        } else {
+            std::env::remove_var(name);
+        }
     }
 
     #[tokio::test]
@@ -722,6 +1011,57 @@ mod tests {
         assert!(!app.is_modified());
         assert!(!app.should_quit());
         assert_eq!(app.file_path(), None);
+    }
+
+    #[tokio::test]
+    async fn test_app_creation_with_env_overrides() {
+        let (prev_config_dir, prev_config_path, prev_data_dir, config_dir, _data_dir) = {
+            let _guard = env_lock().lock().unwrap();
+            let prev_config_dir = std::env::var("SCRIPTORIS_CONFIG_DIR").ok();
+            let prev_config_path = std::env::var("SCRIPTORIS_CONFIG_PATH").ok();
+            let prev_data_dir = std::env::var("SCRIPTORIS_DATA_DIR").ok();
+
+            let config_dir = TempDir::new().unwrap();
+            let data_dir = TempDir::new().unwrap();
+
+            std::env::set_var("SCRIPTORIS_CONFIG_DIR", config_dir.path());
+            std::env::remove_var("SCRIPTORIS_CONFIG_PATH");
+            std::env::set_var("SCRIPTORIS_DATA_DIR", data_dir.path());
+            (prev_config_dir, prev_config_path, prev_data_dir, config_dir, data_dir)
+        }; // release lock before await
+
+        let app = App::new()
+            .await
+            .expect("app should initialize with environment overrides");
+
+        let config_path = config_dir.path().join("config.json");
+        assert!(try_exists(&config_path)
+            .await
+            .expect("config path existence check should succeed"));
+
+        drop(app);
+
+        let session_manager =
+            SessionManager::new().expect("session manager should use overridden data directory");
+
+        let editor = Editor::new();
+        let file_manager = FileManager::new();
+        let config = Config::default();
+
+        let result = session_manager
+            .save_session("envtest", &editor, &file_manager, &config)
+            .await;
+        assert!(result.is_ok());
+
+        let sessions = session_manager
+            .list_sessions()
+            .await
+            .expect("session list should load");
+        assert!(sessions.iter().any(|session| session.name == "envtest"));
+
+        restore_env("SCRIPTORIS_CONFIG_DIR", prev_config_dir);
+        restore_env("SCRIPTORIS_CONFIG_PATH", prev_config_path);
+        restore_env("SCRIPTORIS_DATA_DIR", prev_data_dir);
     }
 
     #[tokio::test]
@@ -946,7 +1286,25 @@ mod tests {
 
         // Try playing non-existent macro
         app.play_macro('z');
-        assert!(app.ui_state.get_status_message().contains("No macro"));
+        assert!(app
+            .ui_state
+            .get_status_message()
+            .contains("マクロは登録されていません"));
+    }
+
+    #[tokio::test]
+    async fn test_macro_playback_empty_register() {
+        let mut app = App::new().await.unwrap();
+
+        app.start_macro_recording('c');
+        // すぐに停止して空のマクロを作成
+        app.stop_macro_recording();
+
+        app.play_macro('c');
+        assert!(app
+            .ui_state
+            .get_status_message()
+            .contains("マクロの再生が完了しました"));
     }
 
     #[tokio::test]

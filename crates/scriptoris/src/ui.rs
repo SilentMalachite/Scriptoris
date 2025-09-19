@@ -1,4 +1,6 @@
-use crate::app::{Split, Window};
+//! 標準 UI レンダラー。`WindowManager` の構成に従ってバッファを描画します。
+
+use crate::app::{WindowPane, WindowSplitKind};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -8,6 +10,17 @@ use ratatui::{
 };
 
 use crate::app::{App, Mode};
+
+fn parse_color(value: &str) -> Option<Color> {
+    let hex = value.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some(Color::Rgb(r, g, b))
+}
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -24,26 +37,73 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     if app.show_help() {
         draw_help(f, chunks[1]);
     } else {
-        draw_windows(f, app, chunks[1], &app.window_manager.get_root().clone());
+        draw_editor_panes(f, app, chunks[1]);
     }
 
     draw_status_bar(f, app, chunks[2]);
 }
 
-fn draw_windows(f: &mut Frame, app: &mut App, area: Rect, window: &Window) {
-    let buffer_id = match &window.split {
-        Split::Leaf { buffer_id } => buffer_id,
-    };
+fn draw_editor_panes(f: &mut Frame, app: &mut App, area: Rect) {
+    let panes = app.window_manager.panes().to_vec();
+    let split_kind = app.window_manager.split_kind();
 
-    let current_window_id = app.window_manager.current_window_id;
-    let is_current = window.id == current_window_id;
+    match split_kind {
+        WindowSplitKind::None | WindowSplitKind::Horizontal | WindowSplitKind::Vertical
+            if panes.len() <= 1 =>
+        {
+            if let Some(pane) = panes.first() {
+                draw_single_pane(f, app, area, pane, true);
+            }
+        }
+        WindowSplitKind::Horizontal => {
+            let chunk_constraints = if panes.len() > 1 {
+                let share = (100 / panes.len().max(1)) as u16;
+                vec![Constraint::Percentage(share); panes.len()]
+            } else {
+                vec![Constraint::Percentage(100)]
+            };
 
-    if let Some(buffer_index) = app
-        .buffer_manager
-        .buffers
-        .iter()
-        .position(|b| b.id == *buffer_id)
-    {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(chunk_constraints)
+                .split(area);
+
+            for (idx, pane) in panes.iter().enumerate() {
+                let is_current = pane.id == app.window_manager.current_window_id;
+                let target_area = chunks.get(idx).copied().unwrap_or_else(|| chunks[0]);
+                draw_single_pane(f, app, target_area, pane, is_current);
+            }
+        }
+        WindowSplitKind::Vertical => {
+            let chunk_constraints = if panes.len() > 1 {
+                let share = (100 / panes.len().max(1)) as u16;
+                vec![Constraint::Percentage(share); panes.len()]
+            } else {
+                vec![Constraint::Percentage(100)]
+            };
+
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(chunk_constraints)
+                .split(area);
+
+            for (idx, pane) in panes.iter().enumerate() {
+                let is_current = pane.id == app.window_manager.current_window_id;
+                let target_area = chunks.get(idx).copied().unwrap_or_else(|| chunks[0]);
+                draw_single_pane(f, app, target_area, pane, is_current);
+            }
+        }
+        WindowSplitKind::None => {
+            if let Some(pane) = panes.first() {
+                let is_current = pane.id == app.window_manager.current_window_id;
+                draw_single_pane(f, app, area, pane, is_current);
+            }
+        }
+    }
+}
+
+fn draw_single_pane(f: &mut Frame, app: &mut App, area: Rect, pane: &WindowPane, is_current: bool) {
+    if let Some(buffer_index) = app.buffer_manager.find_index_by_id(pane.buffer_id) {
         draw_buffer_by_index(f, app, buffer_index, area, is_current);
     }
 }
@@ -55,25 +115,65 @@ fn draw_buffer_by_index(
     area: Rect,
     is_current: bool,
 ) {
-    let buffer = &app.buffer_manager.buffers[buffer_index];
-
-    let border_style = if is_current {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::DarkGray)
+    let (buffer_title, filename, viewport_lines, viewport_offset, cursor_line, cursor_col) = {
+        let buffer = &app.buffer_manager.buffers[buffer_index];
+        let title = buffer
+            .file_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("[No Name]")
+            .to_string();
+        let filename = buffer
+            .file_path
+            .as_ref()
+            .and_then(|p| p.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "text.md".to_string());
+        let viewport_lines = buffer.content.get_viewport_lines();
+        let viewport_offset = buffer.content.get_viewport_offset();
+        let (cursor_line, cursor_col) = buffer.content.cursor_position();
+        (
+            title,
+            filename,
+            viewport_lines,
+            viewport_offset,
+            cursor_line,
+            cursor_col,
+        )
     };
 
-    let block = Block::default()
+    let theme = &app.config.theme;
+    let accent_color = theme
+        .accent_color
+        .as_deref()
+        .and_then(parse_color)
+        .unwrap_or(Color::Yellow);
+    let inactive_border = theme
+        .editor_foreground
+        .as_deref()
+        .and_then(parse_color)
+        .unwrap_or(Color::DarkGray);
+    let editor_fg = theme
+        .editor_foreground
+        .as_deref()
+        .and_then(parse_color)
+        .unwrap_or(Color::White);
+    let editor_bg = theme.editor_background.as_deref().and_then(parse_color);
+
+    let border_style = if is_current {
+        Style::default().fg(accent_color)
+    } else {
+        Style::default().fg(inactive_border)
+    };
+
+    let mut block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style)
-        .title(
-            buffer
-                .file_path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .unwrap_or("[No Name]"),
-        );
+        .title(buffer_title);
+    if let Some(bg) = editor_bg {
+        block = block.style(Style::default().bg(bg));
+    }
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -88,39 +188,24 @@ fn draw_buffer_by_index(
         .split(inner);
 
     // Draw line numbers
-    let viewport_lines = buffer.content.get_viewport_lines();
-    let start_line = buffer.content.get_viewport_offset();
     let line_numbers: Vec<String> = (0..viewport_lines.len())
-        .map(|i| format!("{:4}", start_line + i + 1))
+        .map(|i| format!("{:4}", viewport_offset + i + 1))
         .collect();
 
     let line_numbers_widget =
-        Paragraph::new(line_numbers.join("\n")).style(Style::default().fg(Color::DarkGray));
+        Paragraph::new(line_numbers.join("\n")).style(Style::default().fg(inactive_border));
 
     f.render_widget(line_numbers_widget, chunks[0]);
 
-    // Get file path for syntax highlighting
-    let filename = buffer
-        .file_path
-        .as_ref()
-        .and_then(|p| p.to_str())
-        .unwrap_or("text.md")
-        .to_string();
-    let theme_name = app.config.theme.syntax_theme.clone();
-
-    // Use a temporary highlighter to avoid borrowing conflicts
-    let highlighter = crate::highlight::Highlighter::new(&theme_name);
+    let highlighter = app.get_highlighter();
     let syntax = highlighter.find_syntax_for_filename(&filename);
     let content_lines = highlighter.highlight_lines_to_ratatui(&viewport_lines, syntax);
-    let content_widget = Paragraph::new(content_lines).style(Style::default().fg(Color::White));
+    let content_widget = Paragraph::new(content_lines).style(Style::default().fg(editor_fg));
     f.render_widget(content_widget, chunks[1]);
 
     // Draw cursor if this is the current window
     if is_current {
         use unicode_width::UnicodeWidthChar;
-        let (cursor_line, cursor_col) = buffer.content.cursor_position();
-        let viewport_offset = buffer.content.get_viewport_offset();
-
         if cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
             let screen_line = cursor_line - viewport_offset;
             let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
@@ -139,14 +224,29 @@ fn draw_buffer_by_index(
 fn draw_title_bar(f: &mut Frame, app: &App, area: Rect) {
     let title = match app.file_path() {
         Some(path) => format!("  Scriptoris -- {}", path.display()),
-        None => String::from("  Scriptoris -- [New File]"),
+        None => String::from("  Scriptoris -- [新規ファイル]"),
     };
 
-    let modified_str = if app.is_modified() { " [Modified]" } else { "" };
+    let modified_str = if app.is_modified() { " [変更あり]" } else { "" };
     let title = format!("{}{}", title, modified_str);
 
+    let status_bg = app
+        .config
+        .theme
+        .status_background
+        .as_deref()
+        .and_then(parse_color)
+        .unwrap_or(Color::Blue);
+    let status_fg = app
+        .config
+        .theme
+        .editor_foreground
+        .as_deref()
+        .and_then(parse_color)
+        .unwrap_or(Color::White);
+
     let title_bar = Paragraph::new(title)
-        .style(Style::default().bg(Color::Blue).fg(Color::White))
+        .style(Style::default().bg(status_bg).fg(status_fg))
         .alignment(Alignment::Left);
 
     f.render_widget(title_bar, area);
@@ -161,61 +261,68 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         ])
         .split(area);
 
+    let theme = &app.config.theme;
+    let status_bg = theme
+        .status_background
+        .as_deref()
+        .and_then(parse_color)
+        .unwrap_or(Color::DarkGray);
+    let status_fg = theme
+        .editor_foreground
+        .as_deref()
+        .and_then(parse_color)
+        .unwrap_or(Color::White);
+    let accent = theme
+        .accent_color
+        .as_deref()
+        .and_then(parse_color)
+        .unwrap_or(Color::Yellow);
+
     // Draw command shortcuts or command input
     match app.mode() {
         Mode::Command => {
             let input = Paragraph::new(format!("{}{}", app.status_message(), app.command_buffer()))
-                .style(Style::default().fg(Color::Yellow));
+                .style(Style::default().fg(accent).bg(status_bg));
             f.render_widget(input, chunks[0]);
         }
         _ => {
             let shortcuts = vec![
                 Span::styled(
                     ":",
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(accent).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(" Command  "),
+                Span::styled(" コマンド  ", Style::default().fg(status_fg)),
                 Span::styled(
                     "i",
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(accent).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(" Insert  "),
+                Span::styled(" 挿入  ", Style::default().fg(status_fg)),
                 Span::styled(
                     "/",
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(accent).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(" Search  "),
+                Span::styled(" 検索  ", Style::default().fg(status_fg)),
                 Span::styled(
                     "?",
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(accent).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(" Help  "),
+                Span::styled(" ヘルプ  ", Style::default().fg(status_fg)),
                 Span::styled(
                     "hjkl",
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(accent).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(" Move"),
+                Span::styled(" Move", Style::default().fg(status_fg)),
             ];
 
-            let shortcut_bar =
-                Paragraph::new(Line::from(shortcuts)).style(Style::default().bg(Color::DarkGray));
+            let shortcut_bar = Paragraph::new(Line::from(shortcuts))
+                .style(Style::default().bg(status_bg).fg(status_fg));
             f.render_widget(shortcut_bar, chunks[0]);
         }
     }
 
     // Draw status message
-    let status =
-        Paragraph::new(app.status_message().to_string()).style(Style::default().fg(Color::Yellow));
+    let status = Paragraph::new(app.status_message().to_string())
+        .style(Style::default().fg(accent).bg(status_bg));
     f.render_widget(status, chunks[1]);
 }
 
@@ -223,38 +330,38 @@ fn draw_help(f: &mut Frame, area: Rect) {
     let help_text = vec![
         Line::from(""),
         Line::from(vec![Span::styled(
-            " HELP -- Vim-style Key Bindings",
+            " ヘルプ — Vim風キー割り当て",
             Style::default().add_modifier(Modifier::BOLD),
         )]),
         Line::from(""),
-        Line::from(" Mode Commands:"),
-        Line::from("  i       Insert mode    - Start inserting text"),
-        Line::from("  Esc     Normal mode    - Return to command mode"),
-        Line::from("  :       Command mode   - Enter vim commands"),
+        Line::from(" モード操作:"),
+        Line::from("  i       挿入モード      - 文字入力を開始"),
+        Line::from("  Esc     ノーマルモード  - コマンド待機へ戻る"),
+        Line::from("  :       コマンドモード  - Vim コマンド入力"),
         Line::from(""),
-        Line::from(" Movement (Normal Mode):"),
-        Line::from("  h j k l                - Left, Down, Up, Right"),
-        Line::from("  Arrow keys             - Also supported"),
+        Line::from(" 移動(ノーマル):"),
+        Line::from("  h j k l                - 左/下/上/右"),
+        Line::from("  矢印キー               - 併用可"),
         Line::from(""),
-        Line::from(" Editing (Normal Mode):"),
-        Line::from("  i       Insert         - Insert before cursor"),
-        Line::from("  a       Append         - Insert after cursor"),
-        Line::from("  o       Open line      - New line below"),
-        Line::from("  O       Open line      - New line above"),
-        Line::from("  x       Delete char    - Delete character under cursor"),
+        Line::from(" 編集(ノーマル):"),
+        Line::from("  i       挿入           - カーソル前に挿入"),
+        Line::from("  a       追加           - カーソル後に挿入"),
+        Line::from("  o       改行(下)       - 下に新しい行"),
+        Line::from("  O       改行(上)       - 上に新しい行"),
+        Line::from("  x       1文字削除       - カーソル位置の文字"),
         Line::from(""),
-        Line::from(" File Commands:"),
-        Line::from("  :w      Write          - Save file"),
-        Line::from("  :q      Quit           - Exit (if no changes)"),
-        Line::from("  :q!     Force quit     - Exit without saving"),
-        Line::from("  :wq     Write & quit   - Save and exit"),
-        Line::from("  :e file Edit           - Open file"),
+        Line::from(" ファイル操作:"),
+        Line::from("  :w      保存           - ファイルを保存"),
+        Line::from("  :q      終了           - 変更なし時のみ終了"),
+        Line::from("  :q!     強制終了       - 保存せず終了"),
+        Line::from("  :wq     保存して終了   - 保存後に終了"),
+        Line::from("  :e file 開く           - 指定ファイルを開く"),
         Line::from(""),
-        Line::from(" Search:"),
-        Line::from("  /text   Search         - Search for text"),
+        Line::from(" 検索:"),
+        Line::from("  /text   検索           - テキストを検索"),
         Line::from(""),
         Line::from(vec![Span::styled(
-            " Press ? to exit help",
+            " ? キーでヘルプを閉じる",
             Style::default().add_modifier(Modifier::ITALIC),
         )]),
     ];
@@ -264,7 +371,7 @@ fn draw_help(f: &mut Frame, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Help ")
+                .title(" ヘルプ ")
                 .border_style(Style::default().fg(Color::Blue)),
         )
         .alignment(Alignment::Left);

@@ -42,10 +42,10 @@ impl EnhancedUI {
                 let dir = path.parent().and_then(|p| p.to_str()).unwrap_or("");
                 format!("  {} • {}", filename, dir)
             }
-            None => String::from("  [New File]"),
+            None => String::from("  [新規ファイル]"),
         };
 
-        let modified_indicator = if app.is_modified() { " ●" } else { "" };
+        let modified_indicator = if app.is_modified() { " ●(変更あり)" } else { "" };
         let title = format!("Scriptoris{}{}", modified_indicator, file_info);
 
         // Color scheme based on modification state
@@ -124,16 +124,14 @@ impl EnhancedUI {
         let mut content_lines = highlighter.highlight_lines_to_ratatui(&lines, syntax);
 
         // Current line background highlight overlay
-        if app.config.editor.highlight_current_line {
-            if cursor_line < content_lines.len() {
-                let bg = Style::default().bg(Color::Rgb(40, 40, 40));
-                let spans = content_lines[cursor_line]
-                    .spans
-                    .iter()
-                    .map(|s| Span::styled(s.content.clone().into_owned(), s.style.patch(bg)))
-                    .collect::<Vec<_>>();
-                content_lines[cursor_line] = Line::from(spans);
-            }
+        if app.config.editor.highlight_current_line && cursor_line < content_lines.len() {
+            let bg = Style::default().bg(Color::Rgb(40, 40, 40));
+            let spans = content_lines[cursor_line]
+                .spans
+                .iter()
+                .map(|s| Span::styled(s.content.clone().into_owned(), s.style.patch(bg)))
+                .collect::<Vec<_>>();
+            content_lines[cursor_line] = Line::from(spans);
         }
 
         let editor_widget = Paragraph::new(content_lines)
@@ -163,7 +161,7 @@ impl EnhancedUI {
         let display_col: usize = logical_prefix.chars().map(|c| c.width().unwrap_or(1)).sum();
 
         // Calculate cursor position on screen
-        if cursor_line < area.height as usize && display_col < area.width as usize as usize {
+        if cursor_line < area.height as usize && display_col < area.width as usize {
             let cursor_x = area.x + display_col as u16;
             let cursor_y = area.y + cursor_line as u16;
 
@@ -219,11 +217,11 @@ impl EnhancedUI {
 
         let file_info = match app.file_path() {
             Some(path) => format!("{} ", path.display()),
-            None => "[New File] ".to_string(),
+            None => "[新規ファイル] ".to_string(),
         };
 
         let position_info = format!(
-            "Ln {}, Col {} ({}/{})",
+            "行 {}, 桁 {} ({}/{})",
             line + 1,
             col + 1,
             line + 1,
@@ -260,42 +258,42 @@ impl EnhancedUI {
                             .fg(Color::Yellow)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::raw(" Command  "),
+                    Span::raw(" コマンド  "),
                     Span::styled(
                         "i",
                         Style::default()
                             .fg(Color::Green)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::raw(" Insert  "),
+                    Span::raw(" 挿入  "),
                     Span::styled(
                         "/",
                         Style::default()
                             .fg(Color::Cyan)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::raw(" Search  "),
+                    Span::raw(" 検索  "),
                     Span::styled(
                         "u",
                         Style::default()
                             .fg(Color::Magenta)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::raw(" Undo  "),
+                    Span::raw(" 元に戻す  "),
                     Span::styled(
                         "^R",
                         Style::default()
                             .fg(Color::Magenta)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::raw(" Redo  "),
+                    Span::raw(" やり直し  "),
                     Span::styled(
                         "?",
                         Style::default()
                             .fg(Color::White)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::raw(" Help"),
+                    Span::raw(" ヘルプ"),
                 ];
 
                 let shortcut_bar = Paragraph::new(Line::from(shortcuts))

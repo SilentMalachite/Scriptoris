@@ -86,6 +86,16 @@ RUST_LOG=debug cargo test
 cargo test --test integration
 ```
 
+テストやローカル検証でユーザー設定・セッションを汚したくない場合は、一時ディレクトリを指す環境変数を事前に設定してください。
+
+```bash
+export SCRIPTORIS_CONFIG_DIR=$(mktemp -d)
+export SCRIPTORIS_DATA_DIR=$(mktemp -d)
+cargo test
+```
+
+`SCRIPTORIS_CONFIG_PATH` を使えば個別ファイルを直接指定することもできます。
+
 ### Test Coverage
 
 We aim for comprehensive test coverage. When adding new features:

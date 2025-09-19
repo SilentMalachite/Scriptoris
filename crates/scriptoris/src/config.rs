@@ -2,6 +2,7 @@ use anyhow::Result;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tokio::fs::try_exists;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -22,6 +23,14 @@ pub enum UIMode {
 pub struct Theme {
     pub name: String,
     pub syntax_theme: String,
+    #[serde(default)]
+    pub editor_foreground: Option<String>,
+    #[serde(default)]
+    pub editor_background: Option<String>,
+    #[serde(default)]
+    pub accent_color: Option<String>,
+    #[serde(default)]
+    pub status_background: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +61,10 @@ impl Default for Config {
             theme: Theme {
                 name: String::from("dark"),
                 syntax_theme: String::from("base16-ocean.dark"),
+                editor_foreground: Some(String::from("#D8DEE9")),
+                editor_background: Some(String::from("#1E1E1E")),
+                accent_color: Some(String::from("#FFD166")),
+                status_background: Some(String::from("#005F87")),
             },
             font: FontConfig {
                 size: 14,
@@ -73,7 +86,7 @@ impl Default for Config {
 impl Config {
     pub async fn load() -> Result<Self> {
         if let Some(config_path) = Self::config_path() {
-            if config_path.exists() {
+            if try_exists(&config_path).await? {
                 let content = tokio::fs::read_to_string(&config_path).await?;
                 // Try to deserialize, fall back to default if it fails
                 match serde_json::from_str::<Config>(&content) {
@@ -105,6 +118,14 @@ impl Config {
     }
 
     fn config_path() -> Option<PathBuf> {
+        if let Ok(path) = std::env::var("SCRIPTORIS_CONFIG_PATH") {
+            return Some(PathBuf::from(path));
+        }
+
+        if let Ok(dir) = std::env::var("SCRIPTORIS_CONFIG_DIR") {
+            return Some(PathBuf::from(dir).join("config.json"));
+        }
+
         ProjectDirs::from("com", "scriptoris", "scriptoris")
             .map(|dirs| dirs.config_dir().join("config.json"))
     }
@@ -113,6 +134,33 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+    use tempfile::TempDir;
+
+    fn config_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn set_config_dir(path: &std::path::Path) -> (Option<String>, Option<String>) {
+        let previous_dir = std::env::var("SCRIPTORIS_CONFIG_DIR").ok();
+        let previous_path = std::env::var("SCRIPTORIS_CONFIG_PATH").ok();
+        std::env::set_var("SCRIPTORIS_CONFIG_DIR", path);
+        std::env::remove_var("SCRIPTORIS_CONFIG_PATH");
+        (previous_dir, previous_path)
+    }
+
+    fn restore_config_env(previous: (Option<String>, Option<String>)) {
+        match previous.0 {
+            Some(value) => std::env::set_var("SCRIPTORIS_CONFIG_DIR", value),
+            None => std::env::remove_var("SCRIPTORIS_CONFIG_DIR"),
+        }
+
+        match previous.1 {
+            Some(value) => std::env::set_var("SCRIPTORIS_CONFIG_PATH", value),
+            None => std::env::remove_var("SCRIPTORIS_CONFIG_PATH"),
+        }
+    }
 
     #[test]
     fn test_default_config() {
@@ -127,6 +175,10 @@ mod tests {
         assert!(config.editor.highlight_current_line);
         assert!(!config.editor.wrap_lines);
         assert!(matches!(config.keybindings, KeybindingStyle::Vim));
+        assert_eq!(config.theme.editor_foreground.as_deref(), Some("#D8DEE9"));
+        assert_eq!(config.theme.editor_background.as_deref(), Some("#1E1E1E"));
+        assert_eq!(config.theme.accent_color.as_deref(), Some("#FFD166"));
+        assert_eq!(config.theme.status_background.as_deref(), Some("#005F87"));
     }
 
     #[tokio::test]
@@ -151,17 +203,30 @@ mod tests {
         assert_eq!(config.theme.name, config_from_json.theme.name);
         assert_eq!(config.font.size, config_from_json.font.size);
         assert_eq!(config.editor.tab_size, config_from_json.editor.tab_size);
+        assert_eq!(
+            config.theme.editor_foreground,
+            config_from_json.theme.editor_foreground
+        );
     }
 
     #[tokio::test]
     async fn test_config_load_default() {
-        // This test loads config - if file doesn't exist, should create default
+        // Serialize/deserialize in isolated directory to avoid touching user config
+        let previous_env = {
+            let _guard = config_test_lock().lock().unwrap();
+            let temp_dir = TempDir::new().unwrap();
+            let previous = set_config_dir(temp_dir.path());
+            previous
+        }; // release lock before await
+
         let config = Config::load().await;
         assert!(config.is_ok());
 
         let config = config.unwrap();
         assert_eq!(config.theme.name, "dark");
         assert!(matches!(config.keybindings, KeybindingStyle::Vim));
+
+        restore_config_env(previous_env);
     }
 
     #[test]

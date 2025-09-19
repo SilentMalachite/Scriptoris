@@ -31,10 +31,13 @@ impl FileManager {
 
     pub async fn open_file(&mut self, path: PathBuf) -> Result<String> {
         // Check if file is readonly
-        if let Ok(metadata) = std::fs::metadata(&path) {
-            self.is_readonly = metadata.permissions().readonly();
-        } else {
-            self.is_readonly = false;
+        match fs::metadata(&path).await {
+            Ok(metadata) => {
+                self.is_readonly = metadata.permissions().readonly();
+            }
+            Err(_) => {
+                self.is_readonly = false;
+            }
         }
 
         let content = fs::read_to_string(&path).await?;
@@ -47,9 +50,9 @@ impl FileManager {
             let content = editor.get_content();
             fs::write(path, content).await?;
             editor.mark_saved();
-            Ok(format!("Wrote {} lines", editor.line_count()))
+            Ok(format!("{} 行を書き込みました", editor.line_count()))
         } else {
-            Err(anyhow::anyhow!("No file path set"))
+            Err(anyhow::anyhow!("ファイルパスが設定されていません"))
         }
     }
 
@@ -59,7 +62,13 @@ impl FileManager {
         self.current_path = Some(path);
         self.is_readonly = false;
         editor.mark_saved();
-        Ok(format!("Wrote {} lines", editor.line_count()))
+        Ok(format!("{} 行を書き込みました", editor.line_count()))
+    }
+}
+
+impl Default for FileManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

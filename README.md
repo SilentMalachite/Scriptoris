@@ -124,6 +124,16 @@ cargo test
 RUST_LOG=debug cargo run
 ```
 
+### Environment Tips
+
+開発時にユーザー設定やセッションディレクトリを分離したい場合は、以下の環境変数を利用できます。
+
+- `SCRIPTORIS_CONFIG_PATH` — 設定ファイルの絶対パスを直接指定（最優先）
+- `SCRIPTORIS_CONFIG_DIR` — `config.json` を含むディレクトリを指定
+- `SCRIPTORIS_DATA_DIR` — セッション JSON を保存するディレクトリを指定
+
+CI やローカルテストでは一時ディレクトリを割り当てることで、既存ユーザー設定を書き換えずに動作検証できます。
+
 ### Architecture Overview
 
 - **scriptoris** - Main TUI application using Ratatui + Crossterm
@@ -147,6 +157,11 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for deta
 Configuration file location:
 - **Linux/macOS**: `~/.config/scriptoris/config.json`
 - **Windows**: `%APPDATA%\scriptoris\config.json`
+
+Environment overrides (開発・テスト向け):
+- `SCRIPTORIS_CONFIG_PATH` — 設定ファイルへの完全なパスを指定（`SCRIPTORIS_CONFIG_DIR` より優先）
+- `SCRIPTORIS_CONFIG_DIR` — `config.json` を含むディレクトリを指定（`config.json` が自動連結）
+- `SCRIPTORIS_DATA_DIR` — セッションなどのデータを保存するルートディレクトリを指定
 
 ### Example Configuration
 

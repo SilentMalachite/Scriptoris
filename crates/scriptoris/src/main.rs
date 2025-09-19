@@ -16,6 +16,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use log::LevelFilter;
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     Terminal,
@@ -24,8 +25,13 @@ use std::{io, time::Duration};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logger
-    env_logger::init();
+    // Initialize logger with debug fallback for development
+    let mut logger = env_logger::Builder::from_default_env();
+    if std::env::var_os("RUST_LOG").is_none() {
+        logger.filter_level(LevelFilter::Info);
+        logger.filter_module("scriptoris", LevelFilter::Debug);
+    }
+    logger.init();
 
     // Setup terminal
     enable_raw_mode()?;

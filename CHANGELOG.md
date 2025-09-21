@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2025-09-21
+
+### Added
+- 日本語ローカライズ（UI/ヘルプ/メッセージ）
+- テーマ配色オプション（設定/UI 反映）
+
+### Changed
+- ロガー初期化を見直し（開発時デバッグ有効化）
+- 依存バージョンを厳密固定（=x.y.z）
+- ドキュメント更新とコードフォーマット調整
+
+### Fixed
+- エラーハンドリング強化（`unwrap` 削減）
+- バッファ/ウィンドウ管理の安定化とUI反映
+- CI/Clippy 警告を解消（`-D warnings`）
+- セッション/マクロ/環境変数のテスト追加と安定化
+
 ### Fixed
 - **Architecture Improvements**: Major refactoring to resolve borrow checker conflicts and improve code structure
   - Eliminated duplicate editor state between `App.editor` and `Buffer.content`

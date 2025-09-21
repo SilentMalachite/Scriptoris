@@ -40,7 +40,7 @@ impl ScriptorisLspPlugin {
         // Start language servers based on config
         let config = self.lsp.config.read().await;
         if config.auto_start {
-            for (name, _) in &config.servers {
+            for name in config.servers.keys() {
                 // Try to start each configured server
                 let _ = self.lsp.start_server(name).await;
             }
@@ -174,6 +174,12 @@ impl ScriptorisLspPlugin {
     }
 }
 
+impl Default for ScriptorisLspPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // Implement the Scriptoris Plugin trait
 #[async_trait]
 impl scriptoris::app::Plugin for ScriptorisLspPlugin {
@@ -282,7 +288,7 @@ impl scriptoris::app::Plugin for ScriptorisLspPlugin {
                             Ok(Some("Usage: :lsp stop <server-name>".to_string()))
                         }
                     }
-                    "status" => Ok(Some("LSP Status: Active".to_string())),
+                    "status" => Ok(Some("LSP ステータス: 有効".to_string())),
                     "restart" => Ok(Some("Restarting LSP servers...".to_string())),
                     _ => Ok(Some("Unknown LSP command".to_string())),
                 }

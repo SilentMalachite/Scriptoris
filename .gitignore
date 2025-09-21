@@ -13,3 +13,6 @@ crates/bridge_archived/
 
 # Old assets
 assets/
+
+# Local tool caches
+.serena/

@@ -567,3 +567,9 @@ impl LspPlugin {
         }
     }
 }
+
+impl Default for LspPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}

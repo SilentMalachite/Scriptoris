@@ -1,8 +1,12 @@
+//! エディタのセッション（開いているファイルやカーソル位置など）を
+//! JSON 形式で保存・復元するモジュール。
+
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::fs;
-use chrono::{DateTime, Utc};
+use tokio::fs::try_exists;
 
 use crate::config::Config;
 use crate::editor::Editor;
@@ -43,17 +47,18 @@ impl SessionManager {
     }
 
     fn get_session_dir() -> Result<PathBuf> {
+        if let Ok(dir) = std::env::var("SCRIPTORIS_DATA_DIR") {
+            return Ok(PathBuf::from(dir).join("sessions"));
+        }
         let dirs = directories::ProjectDirs::from("com", "scriptoris", "scriptoris")
-            .ok_or_else(|| anyhow::anyhow!("Could not determine project directories"))?;
+            .ok_or_else(|| anyhow::anyhow!("プロジェクトディレクトリを特定できませんでした"))?;
         let session_dir = dirs.data_dir().join("sessions");
         Ok(session_dir)
     }
 
     /// Create session directory if it doesn't exist
     async fn ensure_session_dir(&self) -> Result<()> {
-        if !self.session_dir.exists() {
-            fs::create_dir_all(&self.session_dir).await?;
-        }
+        fs::create_dir_all(&self.session_dir).await?;
         Ok(())
     }
 
@@ -90,7 +95,7 @@ impl SessionManager {
         let json = serde_json::to_string_pretty(&session_data)?;
         fs::write(&filepath, json).await?;
 
-        Ok(format!("Session '{}' saved", name))
+        Ok(format!("セッション '{}' を保存しました", name))
     }
 
     /// Load session by name
@@ -98,8 +103,8 @@ impl SessionManager {
         let filename = format!("{}.json", name);
         let filepath = self.session_dir.join(filename);
 
-        if !filepath.exists() {
-            return Err(anyhow::anyhow!("Session '{}' not found", name));
+        if !try_exists(&filepath).await? {
+            return Err(anyhow::anyhow!("セッション '{}' は見つかりません", name));
         }
 
         let json = fs::read_to_string(&filepath).await?;
@@ -115,7 +120,7 @@ impl SessionManager {
 
     /// List all available sessions
     pub async fn list_sessions(&self) -> Result<Vec<SessionData>> {
-        if !self.session_dir.exists() {
+        if !try_exists(&self.session_dir).await? {
             return Ok(Vec::new());
         }
 
@@ -144,24 +149,98 @@ impl SessionManager {
         let filename = format!("{}.json", name);
         let filepath = self.session_dir.join(filename);
 
-        if !filepath.exists() {
-            return Err(anyhow::anyhow!("Session '{}' not found", name));
+        if !try_exists(&filepath).await? {
+            return Err(anyhow::anyhow!("セッション '{}' は見つかりません", name));
         }
 
         fs::remove_file(&filepath).await?;
-        Ok(format!("Session '{}' deleted", name))
-    }
-
-    /// Check if session exists
-    pub async fn session_exists(&self, name: &str) -> bool {
-        let filename = format!("{}.json", name);
-        let filepath = self.session_dir.join(filename);
-        filepath.exists()
+        Ok(format!("セッション '{}' を削除しました", name))
     }
 }
 
-impl Default for SessionManager {
-    fn default() -> Self {
-        Self::new().unwrap()
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, OnceLock};
+    use tempfile::{NamedTempFile, TempDir};
+
+    fn session_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn set_data_dir(path: &std::path::Path) -> Option<String> {
+        let previous = std::env::var("SCRIPTORIS_DATA_DIR").ok();
+        std::env::set_var("SCRIPTORIS_DATA_DIR", path);
+        previous
+    }
+
+    fn restore_data_dir(previous: Option<String>) {
+        if let Some(value) = previous {
+            std::env::set_var("SCRIPTORIS_DATA_DIR", value);
+        } else {
+            std::env::remove_var("SCRIPTORIS_DATA_DIR");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_save_load_and_delete_session() {
+        let previous_env = {
+            let _guard = session_test_lock().lock().unwrap();
+            let data_dir = TempDir::new().unwrap();
+            set_data_dir(data_dir.path())
+        }; // release lock before await
+
+        let manager = SessionManager::new().expect("session manager should initialize");
+
+        let mut editor = Editor::new();
+        editor.set_content("Hello".to_string());
+        editor.set_cursor_position(0, 5);
+        editor.set_viewport_offset(0);
+
+        let mut file_manager = FileManager::new();
+        let temp_file = NamedTempFile::new().unwrap();
+        file_manager.current_path = Some(temp_file.path().to_path_buf());
+
+        let mut config = Config::default();
+        config.editor.tab_size = 2;
+        config.editor.use_spaces = false;
+
+        let save_message = manager
+            .save_session("test", &editor, &file_manager, &config)
+            .await
+            .expect("session should save");
+        assert!(save_message.contains("保存"));
+
+        let loaded = manager
+            .load_session("test")
+            .await
+            .expect("session should load");
+        assert_eq!(loaded.name, "test");
+        assert_eq!(loaded.cursor_col, 4);
+        assert_eq!(loaded.editor_config.tab_size, 2);
+
+        let delete_message = manager
+            .delete_session("test")
+            .await
+            .expect("session should delete");
+        assert!(delete_message.contains("削除"));
+
+        restore_data_dir(previous_env);
+    }
+
+    #[tokio::test]
+    async fn test_load_missing_session_returns_error() {
+        let previous_env = {
+            let _guard = session_test_lock().lock().unwrap();
+            let data_dir = TempDir::new().unwrap();
+            set_data_dir(data_dir.path())
+        }; // release lock before await
+
+        let manager = SessionManager::new().expect("session manager should initialize");
+        let error = manager.load_session("missing").await.unwrap_err();
+        assert!(error.to_string().contains("見つかりません"));
+
+        restore_data_dir(previous_env);
     }
 }

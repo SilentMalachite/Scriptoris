@@ -21,7 +21,14 @@ impl Highlighter {
             .get(theme_name)
             .cloned()
             .or_else(|| theme_set.themes.get(fallback).cloned())
-            .unwrap_or_else(|| theme_set.themes.values().next().cloned().unwrap());
+            .unwrap_or_else(|| {
+                theme_set
+                    .themes
+                    .values()
+                    .next()
+                    .cloned()
+                    .unwrap_or_default()
+            });
 
         Self {
             syntax_set,

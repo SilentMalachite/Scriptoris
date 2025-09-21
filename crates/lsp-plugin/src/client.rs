@@ -92,11 +92,11 @@ impl LspClient {
                         if line == "\r\n" || line == "\n" {
                             break;
                         }
-                        if line.starts_with("Content-Length: ") {
-                            if let Ok(len) = line[16..].trim().parse::<usize>() {
+                        if let Some(stripped) = line.strip_prefix("Content-Length: ") {
+                            if let Ok(len) = stripped.trim().parse::<usize>() {
                                 // Read content
                                 let mut content = vec![0u8; len];
-                                if let Ok(_) = reader.read_exact(&mut content).await {
+                                if reader.read_exact(&mut content).await.is_ok() {
                                     if let Ok(text) = String::from_utf8(content) {
                                         if let Ok(value) = serde_json::from_str::<Value>(&text) {
                                             // Handle response or notification

@@ -1,0 +1,9 @@
+[advisories]
+# 一旦CIを安定化するため、脆弱性・注意喚起は警告として扱う
+vulnerability = "warn"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
+
+# 必要に応じて無視する勧告IDを追加
+ignore = []

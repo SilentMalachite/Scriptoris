@@ -725,9 +725,7 @@ impl App {
                 let suggestions = self.ui_state.get_command_suggestions(current);
                 match suggestions.len() {
                     0 => {}
-                    1 => self
-                        .ui_state
-                        .set_command_buffer(suggestions[0].clone()),
+                    1 => self.ui_state.set_command_buffer(suggestions[0].clone()),
                     _ => {
                         let msg = format!("候補: {}", suggestions.join(", "));
                         self.ui_state.set_info_message(msg);
@@ -1027,7 +1025,13 @@ mod tests {
             std::env::set_var("SCRIPTORIS_CONFIG_DIR", config_dir.path());
             std::env::remove_var("SCRIPTORIS_CONFIG_PATH");
             std::env::set_var("SCRIPTORIS_DATA_DIR", data_dir.path());
-            (prev_config_dir, prev_config_path, prev_data_dir, config_dir, data_dir)
+            (
+                prev_config_dir,
+                prev_config_path,
+                prev_data_dir,
+                config_dir,
+                data_dir,
+            )
         }; // release lock before await
 
         let app = App::new()

@@ -227,7 +227,11 @@ fn draw_title_bar(f: &mut Frame, app: &App, area: Rect) {
         None => String::from("  Scriptoris -- [新規ファイル]"),
     };
 
-    let modified_str = if app.is_modified() { " [変更あり]" } else { "" };
+    let modified_str = if app.is_modified() {
+        " [変更あり]"
+    } else {
+        ""
+    };
     let title = format!("{}{}", title, modified_str);
 
     let status_bg = app

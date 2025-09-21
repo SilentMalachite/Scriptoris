@@ -45,7 +45,11 @@ impl EnhancedUI {
             None => String::from("  [新規ファイル]"),
         };
 
-        let modified_indicator = if app.is_modified() { " ●(変更あり)" } else { "" };
+        let modified_indicator = if app.is_modified() {
+            " ●(変更あり)"
+        } else {
+            ""
+        };
         let title = format!("Scriptoris{}{}", modified_indicator, file_info);
 
         // Color scheme based on modification state

@@ -1,9 +1,9 @@
 # Scriptoris - Terminal Markdown Editor
 
-[![Rust](https://img.shields.io/badge/rust-1.82+-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.82.0-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://github.com/SilentMalachite/Scriptoris/workflows/CI/badge.svg)](https://github.com/SilentMalachite/Scriptoris/actions)
-[![Tests](https://img.shields.io/badge/tests-56_passing-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/tests-135_passing-brightgreen.svg)](#)
 
 > A focused, Vim-inspired terminal Markdown editor built with Rust. 
 > Optimised for fast note taking and documentation with a lean, easy-to-understand codebase.

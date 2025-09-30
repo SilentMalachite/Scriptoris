@@ -47,12 +47,13 @@ chrono = { workspace = true, features = ["serde"] }
 mdcore = { path = "../mdcore" }
 syntect = "=5.2.0"
 
-# LSP client (optional)
-lsp-types = { version = "=0.94.1", optional = true }
+# LSP client integration
+lsp-plugin = { path = "../lsp-plugin" }
+lsp-types = "=0.94.1"
 
 [features]
-default = []
-lsp = ["lsp-types"]
+default = ["lsp"]
+lsp = []
 
 [dev-dependencies]
 tempfile = "=3.22.0"

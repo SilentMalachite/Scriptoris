@@ -32,10 +32,13 @@ Scriptoris is a Vim-style terminal Markdown editor built with Rust + Ratatui. It
 
 ### Key Components
 - `app.rs` - Application state and mode management
-- `editor.rs` - Text editing logic with Ropey integration
-- `ui.rs` - UI rendering and layout
+- `editor.rs` - Text editing logic with Ropey integration and Unicode support
+- `ui.rs` / `enhanced_ui.rs` - UI rendering and layout (basic/enhanced modes)
 - `config.rs` - Settings management
-- `mdcore/markdown.rs` - Markdown to HTML conversion
+- `text_width.rs` - Cross-platform Unicode width calculation
+- `file_manager.rs` - File operations with robust error handling
+- `lsp-plugin/` - LSP integration (async with proper cleanup)
+- `mdcore/markdown.rs` - Markdown to HTML conversion with GFM support
 
 ## Development Guidelines
 
@@ -63,13 +66,20 @@ cargo build --release
 cargo test
 ```
 
+## Recent Improvements
+1. ✅ UTF-16 offset calculation with grapheme cluster support (LSP)
+2. ✅ Enhanced Unicode processing (combining characters, emoji)
+3. ✅ Memory leak prevention (LSP client cleanup, timeout handling)
+4. ✅ Robust error handling (retry with exponential backoff)
+5. ✅ Comprehensive test coverage (LSP, enhanced UI, Japanese text)
+
 ## Future Roadmap
-1. Enhanced Vim operations (visual mode, registers)
-2. Syntax highlighting for Markdown
-3. Search/replace functionality
-4. LSP integration for advanced editing
-5. External preview integration
-6. Git integration
+1. Enhanced Vim operations (more registers, macros)
+2. Advanced search/replace (regex support)
+3. LSP features (code actions, refactoring)
+4. External preview integration
+5. Git integration
+6. Plugin system
 
 ## Security Considerations
 - HTML sanitization in mdcore

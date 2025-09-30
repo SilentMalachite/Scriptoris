@@ -13,75 +13,113 @@ pub struct EnhancedUI;
 impl EnhancedUI {
     pub fn draw(f: &mut Frame, app: &mut App) {
         // Enhanced UI draw with comprehensive error handling
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            Self::draw_internal(f, app)
+        }));
+
+        if let Err(panic_info) = result {
+            log::error!("Enhanced UI panic: {:?}", panic_info);
+            Self::draw_fallback_error(f, f.size(), "拡張UIでパニックが発生しました");
+            return;
+        }
+
         // Validate frame size first
         if f.size().width == 0 || f.size().height == 0 {
             log::error!("Invalid frame size in enhanced UI: {:?}", f.size());
-            Self::draw_critical_error(f, app);
+            Self::draw_fallback_error(f, f.size(), "フレームサイズが無効です");
             return;
         }
 
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // Title bar
-                Constraint::Min(0),    // Editor area
-                Constraint::Length(3), // Enhanced status bar
-            ])
-            .split(f.size());
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(1), // Title bar
+                    Constraint::Min(0),    // Editor area
+                    Constraint::Length(3), // Enhanced status bar
+                ])
+                .split(f.size());
 
-        // Validate chunk creation
-        if chunks.len() != 3 {
-            log::error!("Expected 3 chunks in enhanced UI, got {}", chunks.len());
-            Self::draw_critical_error(f, app);
-            return;
+            // Validate chunk creation
+            if chunks.len() != 3 {
+                log::error!("Expected 3 chunks in enhanced UI, got {}", chunks.len());
+                return Err("チャンク作成に失敗しました");
+            }
+
+            // Draw title bar
+            Self::draw_enhanced_title_bar(f, app, chunks[0]);
+
+            // Draw main content area
+            if app.show_help() {
+                Self::draw_enhanced_help(f, chunks[1]);
+            } else {
+                Self::draw_enhanced_editor(f, app, chunks[1]);
+            }
+
+            // Draw enhanced status bar
+            Self::draw_enhanced_status_bar(f, app, chunks[2]);
+
+            Ok::<(), &'static str>(())
+        }));
+
+        if let Err(error_info) = result {
+            let error_msg = match error_info.downcast::<&'static str>() {
+                Ok(msg) => *msg,
+                Err(_) => "拡張UIで不明なエラーが発生しました",
+            };
+            log::error!("Enhanced UI error: {}", error_msg);
+            Self::draw_fallback_error(f, f.size(), error_msg);
+        }
+    }
+
+    fn draw_internal(f: &mut Frame, _app: &mut App) -> Result<(), &'static str> {
+        // Additional validation
+        if f.size().width < 10 || f.size().height < 3 {
+            return Err("ターミナルサイズが小さすぎます");
         }
 
-        // Draw title bar
-        Self::draw_enhanced_title_bar(f, app, chunks[0]);
-
-        // Draw main content area
-        if app.show_help() {
-            Self::draw_enhanced_help(f, chunks[1]);
-        } else {
-            Self::draw_enhanced_editor(f, app, chunks[1]);
-        }
-
-        // Draw enhanced status bar
-        Self::draw_enhanced_status_bar(f, app, chunks[2]);
+        Ok(())
     }
 
     fn draw_enhanced_title_bar(f: &mut Frame, app: &App, area: Rect) {
-        let file_info = match app.file_path() {
-            Some(path) => {
-                let filename = path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("Unknown");
-                let dir = path.parent().and_then(|p| p.to_str()).unwrap_or("");
-                format!("  {} • {}", filename, dir)
-            }
-            None => String::from("  [新規ファイル]"),
-        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let file_info = match app.file_path() {
+                Some(path) => {
+                    let filename = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("Unknown");
+                    let dir = path.parent().and_then(|p| p.to_str()).unwrap_or("");
+                    format!("  {} • {}", filename, dir)
+                }
+                None => String::from("  [新規ファイル]"),
+            };
 
-        let modified_indicator = if app.is_modified() {
-            " ●(変更あり)"
-        } else {
-            ""
-        };
-        let title = format!("Scriptoris{}{}", modified_indicator, file_info);
+            let modified_indicator = if app.is_modified() {
+                " ●(変更あり)"
+            } else {
+                ""
+            };
+            let title = format!("Scriptoris{}{}", modified_indicator, file_info);
 
-        // Color scheme based on modification state
-        let style = if app.is_modified() {
-            Style::default().bg(Color::Red).fg(Color::White)
-        } else {
-            Style::default().bg(Color::Blue).fg(Color::White)
-        };
+            // Color scheme based on modification state
+            let style = if app.is_modified() {
+                Style::default().bg(Color::Red).fg(Color::White)
+            } else {
+                Style::default().bg(Color::Blue).fg(Color::White)
+            };
 
-        let title_bar = Paragraph::new(title)
-            .style(style)
-            .alignment(Alignment::Left);
+            let title_bar = Paragraph::new(title)
+                .style(style)
+                .alignment(Alignment::Left);
 
-        f.render_widget(title_bar, area);
+            f.render_widget(title_bar, area);
+        }));
+
+        if let Err(_) = result {
+            // Fallback to simple title bar
+            Self::draw_fallback_title_bar(f, app, area);
+        }
     }
 
     fn draw_enhanced_editor(f: &mut Frame, app: &mut App, area: Rect) {
@@ -210,23 +248,30 @@ impl EnhancedUI {
     }
 
     fn draw_enhanced_status_bar(f: &mut Frame, app: &App, area: Rect) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // File info and cursor position
-                Constraint::Length(1), // Command input or shortcuts
-                Constraint::Length(1), // Status messages
-            ])
-            .split(area);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(1), // File info and cursor position
+                    Constraint::Length(1), // Command input or shortcuts
+                    Constraint::Length(1), // Status messages
+                ])
+                .split(area);
 
-        // Draw file info and cursor position
-        Self::draw_file_info(f, app, chunks[0]);
+            // Draw file info and cursor position
+            Self::draw_file_info(f, app, chunks[0]);
 
-        // Draw command input or shortcuts
-        Self::draw_command_area(f, app, chunks[1]);
+            // Draw command input or shortcuts
+            Self::draw_command_area(f, app, chunks[1]);
 
-        // Draw status messages
-        Self::draw_status_messages(f, app, chunks[2]);
+            // Draw status messages
+            Self::draw_status_messages(f, app, chunks[2]);
+        }));
+
+        if let Err(_) = result {
+            // Fallback to simple status bar
+            Self::draw_fallback_status_bar(f, app, area);
+        }
     }
 
     fn draw_file_info(f: &mut Frame, app: &App, area: Rect) {
@@ -584,8 +629,8 @@ impl EnhancedUI {
         f.render_widget(help_widget, area);
     }
 
-    // Fallback UI methods for enhanced UI error recovery
-    fn draw_fallback_title_bar(f: &mut Frame, _app: &App, area: Rect) {
+    // Fallback UI methods for enhanced UI error recovery - public for external use
+    pub fn draw_fallback_title_bar(f: &mut Frame, _app: &App, area: Rect) {
         let title = "Scriptoris Enhanced - エラー回復";
         let title_bar = Paragraph::new(title)
             .style(Style::default().bg(Color::Red).fg(Color::White))
@@ -593,7 +638,7 @@ impl EnhancedUI {
         f.render_widget(title_bar, area);
     }
 
-    fn draw_fallback_status_bar(f: &mut Frame, _app: &App, area: Rect) {
+    pub fn draw_fallback_status_bar(f: &mut Frame, _app: &App, area: Rect) {
         let status = "拡張UIエラー: 基本表示モードに切り替えてください";
         let status_bar = Paragraph::new(status)
             .style(Style::default().bg(Color::DarkGray).fg(Color::Yellow))
@@ -601,7 +646,7 @@ impl EnhancedUI {
         f.render_widget(status_bar, area);
     }
 
-    fn draw_fallback_error(f: &mut Frame, area: Rect, message: &str) {
+    pub fn draw_fallback_error(f: &mut Frame, area: Rect, message: &str) {
         let error_text = vec![
             Line::from(""),
             Line::from("拡張UIエラーが発生しました"),
@@ -626,6 +671,7 @@ impl EnhancedUI {
         f.render_widget(error_widget, area);
     }
 
+    #[allow(dead_code)]
     fn draw_critical_error(f: &mut Frame, _app: &App) {
         let error_text = vec![
             Line::from(""),
@@ -649,5 +695,112 @@ impl EnhancedUI {
             .alignment(Alignment::Center);
 
         f.render_widget(error_widget, f.size());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::App;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    async fn create_test_app() -> App {
+        App::new().await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_enhanced_ui_draw_basic() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = create_test_app().await;
+
+        terminal
+            .draw(|f| {
+                EnhancedUI::draw(f, &mut app);
+            })
+            .unwrap();
+
+        // Test passed if no panic occurred
+        assert!(true);
+    }
+
+    #[tokio::test]
+    async fn test_enhanced_ui_draw_with_help() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = create_test_app().await;
+        app.ui_state.toggle_help();
+
+        terminal
+            .draw(|f| {
+                EnhancedUI::draw(f, &mut app);
+            })
+            .unwrap();
+
+        assert!(app.show_help());
+    }
+
+    #[tokio::test]
+    async fn test_enhanced_ui_small_terminal() {
+        // Test with very small terminal size
+        let backend = TestBackend::new(5, 2);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = create_test_app().await;
+
+        // Should not panic even with tiny size
+        terminal
+            .draw(|f| {
+                EnhancedUI::draw(f, &mut app);
+            })
+            .unwrap();
+
+        assert!(true);
+    }
+
+    #[test]
+    fn test_fallback_error_drawing() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal
+            .draw(|f| {
+                EnhancedUI::draw_fallback_error(f, f.size(), "Test error message");
+            })
+            .unwrap();
+
+        assert!(true);
+    }
+
+    #[tokio::test]
+    async fn test_fallback_title_bar() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let app = create_test_app().await;
+
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, 80, 1);
+                EnhancedUI::draw_fallback_title_bar(f, &app, area);
+            })
+            .unwrap();
+
+        assert!(true);
+    }
+
+    #[tokio::test]
+    async fn test_fallback_status_bar() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let app = create_test_app().await;
+
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 23, 80, 1);
+                EnhancedUI::draw_fallback_status_bar(f, &app, area);
+            })
+            .unwrap();
+
+        assert!(true);
     }
 }

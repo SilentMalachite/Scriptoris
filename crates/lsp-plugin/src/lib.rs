@@ -6,17 +6,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-mod capabilities;
 mod client;
 mod document;
 mod plugin;
-mod server;
 
-pub use capabilities::get_server_capabilities;
 pub use client::LspClient;
 pub use document::Document;
 pub use plugin::ScriptorisLspPlugin;
-pub use server::LspServer;
 
 // LSPプラグイン設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,7 +173,25 @@ impl LspPlugin {
     pub async fn stop_server(&self, server_name: &str) -> Result<()> {
         let mut clients = self.clients.write().await;
         if let Some(client) = clients.remove(server_name) {
-            client.shutdown().await?;
+            // Shutdown with timeout to prevent hanging
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                client.shutdown()
+            ).await {
+                Ok(result) => result?,
+                Err(_) => {
+                    log::warn!("LSP server {} shutdown timeout", server_name);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Stop all running LSP servers
+    pub async fn stop_all_servers(&self) -> Result<()> {
+        let server_names: Vec<String> = self.clients.read().await.keys().cloned().collect();
+        for server_name in server_names {
+            let _ = self.stop_server(&server_name).await;
         }
         Ok(())
     }

@@ -19,8 +19,10 @@ pub struct TextWidthCalculator {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EmojiWidth {
     /// 幅1として扱う
+    #[allow(dead_code)]
     One,
     /// 幅2として扱う
+    #[allow(dead_code)]
     Two,
     /// Unicode標準の幅を使用
     Standard,
@@ -244,6 +246,7 @@ impl TextWidthCalculator {
 }
 
 /// 文字列を指定された幅で折り返す
+#[allow(dead_code)]
 pub fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
     let calculator = TextWidthCalculator::new();
     let mut lines = Vec::new();
@@ -283,6 +286,7 @@ pub fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
 }
 
 /// 適切な折り返し位置を見つける
+#[allow(dead_code)]
 fn find_wrap_position(text: &str, max_width: usize) -> Option<usize> {
     let calculator = TextWidthCalculator::new();
     let mut best_pos = None;

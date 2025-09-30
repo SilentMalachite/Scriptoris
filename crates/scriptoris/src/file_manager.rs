@@ -137,10 +137,9 @@ impl FileManager {
             }
 
             // Attempt to save with retry logic
-            let mut attempts = 0;
             const MAX_ATTEMPTS: u32 = 3;
 
-            loop {
+            for attempt in 1..=MAX_ATTEMPTS {
                 match fs::write(path, content.as_bytes()).await {
                     Ok(_) => {
                         editor.mark_saved();
@@ -148,8 +147,15 @@ impl FileManager {
                         return Ok(format!("{} 行を書き込みました", editor.line_count()));
                     }
                     Err(e) => {
-                        attempts += 1;
-                        if attempts >= MAX_ATTEMPTS {
+                        // For certain errors, don't retry
+                        let should_retry = !matches!(
+                            e.kind(),
+                            std::io::ErrorKind::PermissionDenied
+                                | std::io::ErrorKind::NotFound
+                                | std::io::ErrorKind::InvalidInput
+                        );
+
+                        if !should_retry || attempt >= MAX_ATTEMPTS {
                             let error_msg = match e.kind() {
                                 std::io::ErrorKind::PermissionDenied => {
                                     format!("ファイルへの書き込み権限がありません: {}", path.display())
@@ -164,12 +170,16 @@ impl FileManager {
                             return Err(anyhow::anyhow!(error_msg));
                         }
 
-                        // Wait before retry
-                        tokio::time::sleep(tokio::time::Duration::from_millis(100 * attempts as u64)).await;
-                        log::warn!("Save attempt {} failed for {}, retrying...", attempts, path.display());
+                        // Wait before retry with exponential backoff
+                        let backoff = tokio::time::Duration::from_millis(100 * (1 << (attempt - 1)));
+                        tokio::time::sleep(backoff).await;
+                        log::warn!("Save attempt {} failed for {}, retrying...", attempt, path.display());
                     }
                 }
             }
+
+            // This should never be reached, but just in case
+            Err(anyhow::anyhow!("保存に失敗しました（最大試行回数に達しました）"))
         } else {
             Err(anyhow::anyhow!("ファイルパスが設定されていません"))
         }

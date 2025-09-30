@@ -12,23 +12,16 @@ categories = ["development-tools", "text-editors"]
 
 [dependencies]
 # Core dependencies
-scriptoris = { path = "../scriptoris" }
 anyhow.workspace = true
-async-trait = "=0.1.89"
-crossterm = "=0.27.0"
 directories = { workspace = true }
 
 # LSP
 lsp-types = "=0.94.1"
-# Pin to a stable subversion compatible with stable Cargo
-lsp-server = "=0.7.6"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tower-lsp = "=0.20.0"
 
 # Utilities
 log.workspace = true
 url = "=2.5.7"
-ropey = "=1.6.1"
-dashmap = "=5.5.3"
+unicode-segmentation = "1.10"

@@ -10,6 +10,10 @@ use crate::editor::Editor;
 use crate::file_manager::FileManager;
 use crate::ui_state::UIState;
 
+// LSP integration
+#[cfg(feature = "lsp")]
+use lsp_plugin::LspPlugin;
+
 #[derive(Clone)]
 pub enum Mode {
     Normal,
@@ -38,6 +42,9 @@ pub struct App {
     macro_registers: std::collections::HashMap<char, Vec<KeyEvent>>,
     // Cross-platform text width calculator for accurate cursor positioning
     pub text_calculator: crate::text_width::TextWidthCalculator,
+    // LSP integration for enhanced syntax highlighting and code intelligence
+    #[cfg(feature = "lsp")]
+    lsp_plugin: Option<LspPlugin>,
 }
 
 // バッファ管理
@@ -327,6 +334,15 @@ impl App {
         
         let initial_buffer_id = buffer_manager.get_current().id;
         let command_processor = CommandProcessor::new()?;
+
+        // Initialize LSP plugin if feature is enabled
+        #[cfg(feature = "lsp")]
+        let lsp_plugin = {
+            let plugin = LspPlugin::new();
+            log::info!("LSP plugin initialized successfully");
+            Some(plugin)
+        };
+
         Ok(Self {
             config,
             ui_state: UIState::new(),
@@ -344,6 +360,8 @@ impl App {
             text_calculator: crate::text_width::TextWidthCalculator::new()
                 .east_asian_aware(true)
                 .emoji_width(crate::text_width::EmojiWidth::Standard),
+            #[cfg(feature = "lsp")]
+            lsp_plugin,
         })
     }
 
@@ -889,6 +907,69 @@ impl App {
         let buffer = self.buffer_manager.get_current();
         self.file_manager.current_path = buffer.file_path.clone();
         self.file_manager.is_readonly = buffer.readonly;
+    }
+
+    // LSP integration methods
+    #[cfg(feature = "lsp")]
+    pub async fn notify_lsp_document_opened(&self, path: &std::path::Path, content: &str) {
+        if let Some(ref lsp_plugin) = self.lsp_plugin {
+            let language_id = self.detect_language_id(path);
+            if let Err(e) = lsp_plugin
+                .open_document(path.to_path_buf(), content.to_string(), language_id)
+                .await
+            {
+                log::warn!("Failed to notify LSP of document open: {}", e);
+            }
+        }
+    }
+
+    #[cfg(feature = "lsp")]
+    #[allow(dead_code)]
+    pub async fn notify_lsp_document_changed(&self, path: &std::path::Path, content: &str, version: i32) {
+        if let Some(ref lsp_plugin) = self.lsp_plugin {
+            if let Err(e) = lsp_plugin
+                .update_document(path.to_path_buf(), content.to_string(), version)
+                .await
+            {
+                log::warn!("Failed to notify LSP of document change: {}", e);
+            }
+        }
+    }
+
+    #[cfg(feature = "lsp")]
+    #[allow(dead_code)]
+    pub async fn get_lsp_completions(&self, path: &std::path::Path, line: u32, character: u32) -> Vec<lsp_types::CompletionItem> {
+        if let Some(ref lsp_plugin) = self.lsp_plugin {
+            lsp_plugin.get_completions(path.to_path_buf(), line, character).await.unwrap_or_default()
+        } else {
+            vec![]
+        }
+    }
+
+    #[cfg(not(feature = "lsp"))]
+    pub async fn get_lsp_completions(&self, _path: &std::path::Path, _line: u32, _character: u32) -> Vec<()> {
+        vec![]
+    }
+
+    fn detect_language_id(&self, path: &std::path::Path) -> String {
+        match path.extension().and_then(|ext| ext.to_str()) {
+            Some("rs") => "rust".to_string(),
+            Some("md") => "markdown".to_string(),
+            Some("js") => "javascript".to_string(),
+            Some("ts") => "typescript".to_string(),
+            Some("jsx") => "javascriptreact".to_string(),
+            Some("tsx") => "typescriptreact".to_string(),
+            Some("py") => "python".to_string(),
+            Some("json") => "json".to_string(),
+            Some("yaml") | Some("yml") => "yaml".to_string(),
+            Some("toml") => "toml".to_string(),
+            Some("html") => "html".to_string(),
+            Some("css") => "css".to_string(),
+            Some("sql") => "sql".to_string(),
+            Some("sh") => "shellscript".to_string(),
+            Some("txt") => "plaintext".to_string(),
+            _ => "plaintext".to_string(),
+        }
     }
 
     fn apply_command_action(&mut self, action: CommandAction) -> Option<(UiMessageKind, String)> {

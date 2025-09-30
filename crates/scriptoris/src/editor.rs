@@ -165,8 +165,8 @@ impl Editor {
         // Insert character
         self.rope.insert_char(char_idx, c);
 
-        // Move cursor forward
-        self.cursor_col += 1;
+        // Move cursor forward using text_calculator for proper width
+        self.cursor_col += self.text_calculator.grapheme_width(&c.to_string());
         self.modified = true;
         self.save_state();
     }
@@ -331,20 +331,34 @@ impl Editor {
 
     fn line_col_to_char_idx(&self, line: usize, col: usize) -> usize {
         let line_start = self.rope.line_to_char(line);
-        line_start + col
+        if let Some(line_text) = self.rope.get_line(line) {
+            // text_calculatorを使用して表示カラム位置から文字インデックスに変換
+            let char_offset = self.text_calculator.col_to_char_index(&line_text.to_string(), col);
+            line_start + char_offset
+        } else {
+            line_start + col
+        }
     }
 
     fn char_idx_to_line_col(&self, char_idx: usize) -> (usize, usize) {
         let line = self.rope.char_to_line(char_idx);
         let line_start = self.rope.line_to_char(line);
-        let col = char_idx - line_start;
-        (line, col)
+        let char_offset = char_idx - line_start;
+
+        if let Some(line_text) = self.rope.get_line(line) {
+            // text_calculatorを使用して文字インデックスから表示カラム位置に変換
+            let col = self.text_calculator.char_index_to_col(&line_text.to_string(), char_offset);
+            (line, col)
+        } else {
+            (line, char_offset)
+        }
     }
 
     fn adjust_cursor_col(&mut self) {
         if let Some(line) = self.rope.get_line(self.cursor_line) {
-            let line_len = line.len_chars().saturating_sub(1);
-            self.cursor_col = cmp::min(self.cursor_col, line_len);
+            // text_calculatorを使用して行の表示幅を取得
+            let line_display_width = self.text_calculator.str_width(&line.to_string());
+            self.cursor_col = cmp::min(self.cursor_col, line_display_width);
         }
     }
 
@@ -836,5 +850,66 @@ mod tests {
         editor.insert_char('!');
         assert!(editor.undo());
         assert_eq!(editor.get_content(), "New content");
+    }
+
+    #[test]
+    fn test_japanese_text_insertion() {
+        let mut editor = Editor::new();
+        editor.set_content("こんにちは".to_string());
+        
+        assert_eq!(editor.get_content(), "こんにちは");
+        assert_eq!(editor.line_count(), 1);
+    }
+
+    #[test]
+    fn test_japanese_text_deletion() {
+        let mut editor = Editor::new();
+        editor.set_content("こんにちは世界".to_string());
+        
+        // Verify Japanese text is handled
+        assert_eq!(editor.line_count(), 1);
+        let content = editor.get_content();
+        assert!(content.contains("こんにちは"));
+        assert!(content.contains("世界"));
+    }
+
+    #[test]
+    fn test_mixed_text_editing() {
+        let mut editor = Editor::new();
+        
+        // Mixed Japanese and English
+        let content = "Hello世界Test";
+        editor.set_content(content.to_string());
+        
+        // Test cursor movement
+        editor.move_cursor_right();
+        editor.move_cursor_right();
+        editor.move_cursor_right();
+        editor.move_cursor_right();
+        editor.move_cursor_right();
+        
+        // Insert text at cursor position
+        editor.insert_char('!');
+        
+        assert!(editor.get_content().contains("!"));
+    }
+
+    #[test]
+    fn test_emoji_editing() {
+        let mut editor = Editor::new();
+        editor.set_content("😀🎉".to_string());
+        
+        assert_eq!(editor.get_content(), "😀🎉");
+        assert_eq!(editor.line_count(), 1);
+    }
+
+    #[test]
+    fn test_fullwidth_characters() {
+        let mut editor = Editor::new();
+        editor.set_content("全角文字".to_string());
+        
+        // Fullwidth characters should be handled correctly
+        assert_eq!(editor.line_count(), 1);
+        assert_eq!(editor.get_content(), "全角文字");
     }
 }

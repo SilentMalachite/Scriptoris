@@ -81,7 +81,13 @@ async fn main() -> Result<()> {
         // Validate file path arguments
         match app.file_manager.open_file(file_path.clone()).await {
             Ok(content) => {
+                let content_str = content.clone();
                 app.get_current_editor_mut().set_content(content);
+
+                // Notify LSP plugin of document opening
+                #[cfg(feature = "lsp")]
+                app.notify_lsp_document_opened(&file_path, &content_str).await;
+
                 app.ui_state.set_info_message(
                     format!("ファイルを読み込みました: {}", args[1])
                 );

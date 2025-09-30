@@ -2,18 +2,22 @@ use anyhow::Result;
 use lsp_types::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::process::Stdio;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader as AsyncBufReader};
 use tokio::process::{Child as TokioChild, Command as TokioCommand};
 use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::time::timeout;
 
 #[derive(Debug)]
 pub struct LspClient {
     process: Arc<Mutex<TokioChild>>,
     request_id: Arc<AtomicI32>,
     pending_requests: Arc<RwLock<HashMap<i32, mpsc::Sender<Value>>>>,
+    shutdown: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,8 +52,6 @@ struct JsonRpcError {
     data: Option<Value>,
 }
 
-use std::collections::HashMap;
-
 impl LspClient {
     pub async fn new(command: String, args: Vec<String>) -> Result<Self> {
         let process = TokioCommand::new(command)
@@ -63,6 +65,7 @@ impl LspClient {
             process: Arc::new(Mutex::new(process)),
             request_id: Arc::new(AtomicI32::new(1)),
             pending_requests: Arc::new(RwLock::new(HashMap::new())),
+            shutdown: Arc::new(AtomicBool::new(false)),
         };
 
         // Start message handler
@@ -74,6 +77,7 @@ impl LspClient {
     async fn start_message_handler(&self) {
         let process = self.process.clone();
         let pending_requests = self.pending_requests.clone();
+        let shutdown = self.shutdown.clone();
 
         tokio::spawn(async move {
             let mut process = process.lock().await;
@@ -82,52 +86,67 @@ impl LspClient {
                 let mut buffer = String::new();
 
                 loop {
+                    // Check shutdown flag
+                    if shutdown.load(Ordering::Relaxed) {
+                        log::info!("LSP message handler shutting down");
+                        break;
+                    }
+
                     buffer.clear();
-                    // Read headers
-                    loop {
-                        let mut line = String::new();
-                        if reader.read_line(&mut line).await.is_err() {
-                            break;
-                        }
-                        if line == "\r\n" || line == "\n" {
-                            break;
-                        }
-                        if let Some(stripped) = line.strip_prefix("Content-Length: ") {
-                            if let Ok(len) = stripped.trim().parse::<usize>() {
-                                // Read content
-                                let mut content = vec![0u8; len];
-                                if reader.read_exact(&mut content).await.is_ok() {
-                                    if let Ok(text) = String::from_utf8(content) {
-                                        if let Ok(value) = serde_json::from_str::<Value>(&text) {
-                                            // Handle response or notification
-                                            if value.get("id").is_some() {
-                                                // Response
-                                                if let Ok(response) =
-                                                    serde_json::from_value::<JsonRpcResponse>(
-                                                        value.clone(),
-                                                    )
-                                                {
-                                                    if let Some(sender) = pending_requests
-                                                        .write()
-                                                        .await
-                                                        .remove(&response.id)
-                                                    {
-                                                        let _ = sender.send(value).await;
-                                                    }
-                                                }
-                                            } else {
-                                                // Notification
-                                                let _ = serde_json::from_value::<JsonRpcNotification>(
-                                                    value,
-                                                );
-                                            }
+                    // Read headers with timeout
+                    let read_result = timeout(Duration::from_secs(30), async {
+                        loop {
+                            let mut line = String::new();
+                            if reader.read_line(&mut line).await.is_err() {
+                                return None;
+                            }
+                            if line == "\r\n" || line == "\n" {
+                                break;
+                            }
+                            if let Some(stripped) = line.strip_prefix("Content-Length: ") {
+                                if let Ok(len) = stripped.trim().parse::<usize>() {
+                                    // Read content
+                                    let mut content = vec![0u8; len];
+                                    if reader.read_exact(&mut content).await.is_ok() {
+                                        if let Ok(text) = String::from_utf8(content) {
+                                            return Some(text);
                                         }
                                     }
                                 }
                             }
                         }
+                        None
+                    }).await;
+
+                    match read_result {
+                        Ok(Some(text)) => {
+                            if let Ok(value) = serde_json::from_str::<Value>(&text) {
+                                // Handle response or notification
+                                if value.get("id").is_some() {
+                                    // Response
+                                    if let Ok(response) = serde_json::from_value::<JsonRpcResponse>(value.clone()) {
+                                        if let Some(sender) = pending_requests.write().await.remove(&response.id) {
+                                            let _ = sender.send(value).await;
+                                        }
+                                    }
+                                } else {
+                                    // Notification - log but don't handle
+                                    if let Ok(notif) = serde_json::from_value::<JsonRpcNotification>(value) {
+                                        log::debug!("Received LSP notification: {}", notif.method);
+                                    }
+                                }
+                            }
+                        }
+                        Ok(None) | Err(_) => {
+                            // Timeout or error - exit loop
+                            log::warn!("LSP message handler timeout or error");
+                            break;
+                        }
                     }
                 }
+
+                // Clean up pending requests on exit
+                pending_requests.write().await.clear();
             }
         });
     }
@@ -150,16 +169,27 @@ impl LspClient {
 
         self.send_message(&request).await?;
 
-        if let Some(response) = rx.recv().await {
-            if let Some(result) = response.get("result") {
-                Ok(serde_json::from_value(result.clone())?)
-            } else if let Some(error) = response.get("error") {
-                Err(anyhow::anyhow!("LSP error: {:?}", error))
-            } else {
-                Err(anyhow::anyhow!("Invalid LSP response"))
+        // Wait for response with timeout
+        match timeout(Duration::from_secs(30), rx.recv()).await {
+            Ok(Some(response)) => {
+                if let Some(result) = response.get("result") {
+                    Ok(serde_json::from_value(result.clone())?)
+                } else if let Some(error) = response.get("error") {
+                    Err(anyhow::anyhow!("LSP error: {:?}", error))
+                } else {
+                    Err(anyhow::anyhow!("Invalid LSP response"))
+                }
             }
-        } else {
-            Err(anyhow::anyhow!("No response received"))
+            Ok(None) => {
+                // Clean up pending request
+                self.pending_requests.write().await.remove(&id);
+                Err(anyhow::anyhow!("No response received"))
+            }
+            Err(_) => {
+                // Timeout - clean up pending request
+                self.pending_requests.write().await.remove(&id);
+                Err(anyhow::anyhow!("Request timeout"))
+            }
         }
     }
 
@@ -197,7 +227,23 @@ impl LspClient {
     }
 
     pub async fn shutdown(&self) -> Result<()> {
-        self.send_request::<(), ()>("shutdown", ()).await
+        // Set shutdown flag first
+        self.shutdown.store(true, Ordering::Relaxed);
+
+        // Send shutdown request
+        let result = self.send_request::<(), ()>("shutdown", ()).await;
+        
+        // Send exit notification
+        let _ = self.send_notification("exit", ()).await;
+
+        // Clean up pending requests
+        self.pending_requests.write().await.clear();
+
+        // Kill the process if still running
+        let mut process = self.process.lock().await;
+        let _ = process.kill().await;
+
+        result
     }
 
     pub async fn exit(&self) -> Result<()> {
@@ -328,5 +374,12 @@ impl LspClient {
 
     pub async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
         self.send_request("workspace/executeCommand", params).await
+    }
+}
+
+// Implement Drop to ensure cleanup
+impl Drop for LspClient {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Relaxed);
     }
 }

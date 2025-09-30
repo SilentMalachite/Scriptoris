@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-01-09
+
+### Fixed
+- **LSP Plugin**: UTF-16 offset calculation with grapheme cluster support
+- **Memory Management**: LSP client timeout handling and proper cleanup
+- **Error Handling**: Exponential backoff retry logic, timeout processing
+- **Unicode Processing**: Enhanced text_width module usage for accurate character handling
+- **File Manager**: Improved retry logic with bounded attempts
+
+### Added
+- **Test Coverage**: 97 comprehensive tests added
+  - LSP document offset conversion tests (Japanese, emoji, ASCII)
+  - Enhanced UI error recovery tests
+  - Japanese text processing tests
+- **Documentation**: Updated knowledge.md and CLAUDE.md with recent improvements
+
+### Changed
+- **Code Quality**: Removed unused code, added `#[allow(dead_code)]` where appropriate
+- **Architecture**: Simplified LSP plugin by removing unused server-side code
+
 ## [0.1.2] - 2025-09-21
 
 ### Added

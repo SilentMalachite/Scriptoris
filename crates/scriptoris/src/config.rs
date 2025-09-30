@@ -87,20 +87,53 @@ impl Config {
     pub async fn load() -> Result<Self> {
         if let Some(config_path) = Self::config_path() {
             if try_exists(&config_path).await? {
-                let content = tokio::fs::read_to_string(&config_path).await?;
-                // Try to deserialize, fall back to default if it fails
-                match serde_json::from_str::<Config>(&content) {
-                    Ok(config) => return Ok(config),
-                    Err(_) => {
-                        // If deserialization fails, use default and save it
-                        let default_config = Self::default();
-                        let _ = default_config.save().await;
-                        return Ok(default_config);
+                // Try to read existing config
+                match tokio::fs::read_to_string(&config_path).await {
+                    Ok(content) => {
+                        // Validate JSON format
+                        if content.trim().is_empty() {
+                            log::warn!("Config file is empty, creating new one");
+                            let default_config = Self::default();
+                            let _ = default_config.save().await;
+                            return Ok(default_config);
+                        }
+
+                        // Try to deserialize
+                        match serde_json::from_str::<Config>(&content) {
+                            Ok(mut config) => {
+                                // Validate config values
+                                config.validate()?;
+                                log::info!("Successfully loaded config from: {}", config_path.display());
+                                return Ok(config);
+                            }
+                            Err(json_err) => {
+                                log::error!("Failed to parse config file: {}", json_err);
+
+                                // Backup broken config
+                                let backup_path = config_path.with_extension("bak");
+                                if let Err(e) = tokio::fs::copy(&config_path, &backup_path).await {
+                                    log::warn!("Failed to backup broken config: {}", e);
+                                } else {
+                                    log::info!("Backed up broken config to: {}", backup_path.display());
+                                }
+
+                                // Use default config
+                                let default_config = Self::default();
+                                let _ = default_config.save().await;
+                                return Ok(default_config);
+                            }
+                        }
+                    }
+                    Err(io_err) => {
+                        log::error!("Failed to read config file: {}", io_err);
                     }
                 }
+            } else {
+                log::info!("Config file does not exist, creating default");
             }
         }
 
+        // Create default config
         let default_config = Self::default();
         let _ = default_config.save().await;
         Ok(default_config)
@@ -108,12 +141,89 @@ impl Config {
 
     pub async fn save(&self) -> Result<()> {
         if let Some(config_path) = Self::config_path() {
+            // Validate before saving
+            let mut config_to_save = self.clone();
+            config_to_save.validate()?;
+
+            // Create config directory if it doesn't exist
             if let Some(parent) = config_path.parent() {
-                tokio::fs::create_dir_all(parent).await?;
+                match tokio::fs::create_dir_all(parent).await {
+                    Ok(_) => {
+                        log::debug!("Config directory exists or was created: {}", parent.display());
+                    }
+                    Err(e) => {
+                        return Err(anyhow::anyhow!(
+                            "設定ディレクトリの作成に失敗しました: {} - {}",
+                            parent.display(),
+                            e
+                        ));
+                    }
+                }
             }
-            let content = serde_json::to_string_pretty(self)?;
-            tokio::fs::write(&config_path, content).await?;
+
+            // Serialize and save with error handling
+            match serde_json::to_string_pretty(&config_to_save) {
+                Ok(content) => {
+                    match tokio::fs::write(&config_path, content).await {
+                        Ok(_) => {
+                            log::info!("Successfully saved config to: {}", config_path.display());
+                        }
+                        Err(e) => {
+                            return Err(anyhow::anyhow!(
+                                "設定ファイルの書き込みに失敗しました: {} - {}",
+                                config_path.display(),
+                                e
+                            ));
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!(
+                        "設定のシリアライズに失敗しました: {}",
+                        e
+                    ));
+                }
+            }
         }
+        Ok(())
+    }
+
+    /// Validate configuration values and fix invalid ones
+    pub fn validate(&mut self) -> Result<()> {
+        let mut has_issues = false;
+
+        // Validate font size
+        if self.font.size < 6 || self.font.size > 72 {
+            log::warn!("Invalid font size: {}, using default", self.font.size);
+            self.font.size = 14;
+            has_issues = true;
+        }
+
+        // Validate tab size
+        if self.editor.tab_size == 0 || self.editor.tab_size > 16 {
+            log::warn!("Invalid tab size: {}, using default", self.editor.tab_size);
+            self.editor.tab_size = 4;
+            has_issues = true;
+        }
+
+        // Validate theme name
+        if self.theme.name.is_empty() {
+            log::warn!("Empty theme name, using default");
+            self.theme.name = "dark".to_string();
+            has_issues = true;
+        }
+
+        // Validate syntax theme
+        if self.theme.syntax_theme.is_empty() {
+            log::warn!("Empty syntax theme, using default");
+            self.theme.syntax_theme = "base16-ocean.dark".to_string();
+            has_issues = true;
+        }
+
+        if has_issues {
+            log::info!("Configuration validation completed with corrections");
+        }
+
         Ok(())
     }
 

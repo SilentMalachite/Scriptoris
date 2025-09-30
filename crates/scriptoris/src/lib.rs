@@ -19,6 +19,7 @@ pub mod file_manager;
 pub mod highlight;
 pub mod session_manager;
 pub mod status_manager;
+pub mod text_width;
 pub mod ui_state;
 
 pub use app::{App, BufferManager, Mode, Plugin, PluginManager, WindowManager};

@@ -12,6 +12,14 @@ pub struct EnhancedUI;
 
 impl EnhancedUI {
     pub fn draw(f: &mut Frame, app: &mut App) {
+        // Enhanced UI draw with comprehensive error handling
+        // Validate frame size first
+        if f.size().width == 0 || f.size().height == 0 {
+            log::error!("Invalid frame size in enhanced UI: {:?}", f.size());
+            Self::draw_critical_error(f, app);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -21,14 +29,24 @@ impl EnhancedUI {
             ])
             .split(f.size());
 
+        // Validate chunk creation
+        if chunks.len() != 3 {
+            log::error!("Expected 3 chunks in enhanced UI, got {}", chunks.len());
+            Self::draw_critical_error(f, app);
+            return;
+        }
+
+        // Draw title bar
         Self::draw_enhanced_title_bar(f, app, chunks[0]);
 
+        // Draw main content area
         if app.show_help() {
             Self::draw_enhanced_help(f, chunks[1]);
         } else {
             Self::draw_enhanced_editor(f, app, chunks[1]);
         }
 
+        // Draw enhanced status bar
         Self::draw_enhanced_status_bar(f, app, chunks[2]);
     }
 
@@ -152,7 +170,6 @@ impl EnhancedUI {
     }
 
     fn draw_cursor(f: &mut Frame, app: &App, area: Rect) {
-        use unicode_width::UnicodeWidthChar;
         let (cursor_line, cursor_col) = app.get_current_editor().cursor_position();
 
         // Compute display column considering fullwidth characters on the line
@@ -162,7 +179,9 @@ impl EnhancedUI {
             lines.get(cursor_line).cloned().unwrap_or_default()
         };
         let logical_prefix: String = line_text.chars().take(cursor_col).collect();
-        let display_col: usize = logical_prefix.chars().map(|c| c.width().unwrap_or(1)).sum();
+
+        // Use accurate text width calculation for cross-platform compatibility
+        let display_col: usize = app.text_calculator.str_width(&logical_prefix);
 
         // Calculate cursor position on screen
         if cursor_line < area.height as usize && display_col < area.width as usize {
@@ -563,5 +582,72 @@ impl EnhancedUI {
             .alignment(Alignment::Left);
 
         f.render_widget(help_widget, area);
+    }
+
+    // Fallback UI methods for enhanced UI error recovery
+    fn draw_fallback_title_bar(f: &mut Frame, _app: &App, area: Rect) {
+        let title = "Scriptoris Enhanced - エラー回復";
+        let title_bar = Paragraph::new(title)
+            .style(Style::default().bg(Color::Red).fg(Color::White))
+            .alignment(Alignment::Left);
+        f.render_widget(title_bar, area);
+    }
+
+    fn draw_fallback_status_bar(f: &mut Frame, _app: &App, area: Rect) {
+        let status = "拡張UIエラー: 基本表示モードに切り替えてください";
+        let status_bar = Paragraph::new(status)
+            .style(Style::default().bg(Color::DarkGray).fg(Color::Yellow))
+            .alignment(Alignment::Center);
+        f.render_widget(status_bar, area);
+    }
+
+    fn draw_fallback_error(f: &mut Frame, area: Rect, message: &str) {
+        let error_text = vec![
+            Line::from(""),
+            Line::from("拡張UIエラーが発生しました"),
+            Line::from(""),
+            Line::from(format!("詳細: {}", message)),
+            Line::from(""),
+            Line::from(":set ui-mode standard で基本UIに切り替え"),
+            Line::from(""),
+            Line::from("Escキーを押して続行してください"),
+        ];
+
+        let error_widget = Paragraph::new(error_text)
+            .style(Style::default().fg(Color::White))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" 拡張UIエラー ")
+                    .border_style(Style::default().fg(Color::Red)),
+            )
+            .alignment(Alignment::Center);
+
+        f.render_widget(error_widget, area);
+    }
+
+    fn draw_critical_error(f: &mut Frame, _app: &App) {
+        let error_text = vec![
+            Line::from(""),
+            Line::from("拡張UIで深刻なエラーが発生しました"),
+            Line::from(""),
+            Line::from("アプリケーションを再起動してください"),
+            Line::from(""),
+            Line::from("一時的な対策: 基本UIモードを使用"),
+            Line::from(""),
+            Line::from("Ctrl+C で終了"),
+        ];
+
+        let error_widget = Paragraph::new(error_text)
+            .style(Style::default().fg(Color::White).bg(Color::Red))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" 拡張UI致命的エラー ")
+                    .border_style(Style::default().fg(Color::Red)),
+            )
+            .alignment(Alignment::Center);
+
+        f.render_widget(error_widget, f.size());
     }
 }

@@ -1,6 +1,8 @@
 use ropey::Rope;
 use std::cmp;
 
+use crate::text_width::{TextWidthCalculator, EmojiWidth};
+
 #[derive(Clone)]
 pub struct Editor {
     rope: Rope,
@@ -16,6 +18,11 @@ pub struct Editor {
     // Visual mode selection
     visual_start_line: Option<usize>,
     visual_start_col: Option<usize>,
+    // Text width calculator for accurate cursor positioning
+    text_calculator: TextWidthCalculator,
+    // Tab configuration
+    tab_size: usize,
+    use_spaces: bool,
 }
 
 #[derive(Clone)]
@@ -38,6 +45,11 @@ impl Editor {
             visual_start_col: None,
         };
 
+        // Configure text calculator for cross-platform compatibility
+        let text_calculator = TextWidthCalculator::new()
+            .east_asian_aware(true)
+            .emoji_width(EmojiWidth::Standard);
+
         Self {
             rope: Rope::new(),
             cursor_line: 0,
@@ -50,6 +62,9 @@ impl Editor {
             history_index: 0,
             visual_start_line: None,
             visual_start_col: None,
+            text_calculator,
+            tab_size: 4,
+            use_spaces: true,
         }
     }
 
@@ -140,8 +155,17 @@ impl Editor {
     }
 
     pub fn insert_char(&mut self, c: char) {
+        // Handle memory constraints gracefully
+        if self.rope.len_chars() > 1_000_000 { // 1 million characters
+            log::warn!("Document size approaching limit, insert may be slow");
+        }
+
         let char_idx = self.line_col_to_char_idx(self.cursor_line, self.cursor_col);
+
+        // Insert character
         self.rope.insert_char(char_idx, c);
+
+        // Move cursor forward
         self.cursor_col += 1;
         self.modified = true;
         self.save_state();
@@ -158,10 +182,21 @@ impl Editor {
     }
 
     pub fn insert_tab(&mut self) {
-        // Insert 4 spaces instead of tab
-        for _ in 0..4 {
-            self.insert_char(' ');
+        if self.use_spaces {
+            // Insert spaces according to tab_size
+            for _ in 0..self.tab_size {
+                self.insert_char(' ');
+            }
+        } else {
+            // Insert actual tab character
+            self.insert_char('\t');
         }
+    }
+
+    /// Set tab configuration
+    pub fn set_tab_config(&mut self, tab_size: usize, use_spaces: bool) {
+        self.tab_size = tab_size;
+        self.use_spaces = use_spaces;
     }
 
     pub fn delete_char_backward(&mut self) {
@@ -206,6 +241,13 @@ impl Editor {
             self.cursor_col = 0;
             self.modified = true;
             self.save_state();
+        }
+    }
+
+    pub fn yank_line(&mut self) {
+        if let Some(line) = self.rope.get_line(self.cursor_line) {
+            self.clipboard = line.to_string();
+            // Don't modify the document, just copy to clipboard
         }
     }
 

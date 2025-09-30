@@ -14,15 +14,39 @@ use crate::app::{App, Mode};
 fn parse_color(value: &str) -> Option<Color> {
     let hex = value.trim().trim_start_matches('#');
     if hex.len() != 6 {
+        log::warn!("Invalid color format: '{}', expected 6 hex digits", value);
         return None;
     }
-    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-    Some(Color::Rgb(r, g, b))
+
+    // Use catch_unwind for color parsing safety
+    match std::panic::catch_unwind(|| {
+        let r = u8::from_str_radix(&hex[0..2], 16);
+        let g = u8::from_str_radix(&hex[2..4], 16);
+        let b = u8::from_str_radix(&hex[4..6], 16);
+
+        match (r, g, b) {
+            (Ok(r), Ok(g), Ok(b)) => Some(Color::Rgb(r, g, b)),
+            _ => {
+                log::warn!("Failed to parse hex color: '{}'", value);
+                None
+            }
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            log::error!("Panic during color parsing for '{}': {:?}", value, e);
+            None
+        }
+    }
 }
 
 pub fn draw(f: &mut Frame, app: &mut App) {
+    // Validate frame and app state
+    if f.size().width == 0 || f.size().height == 0 {
+        log::error!("Invalid frame size: {:?}", f.size());
+        return;
+    }
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -32,6 +56,13 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         ])
         .split(f.size());
 
+    // Validate chunk sizes
+    if chunks.len() != 3 {
+        log::error!("Expected 3 chunks, got {}", chunks.len());
+        return;
+    }
+
+    // Draw components
     draw_title_bar(f, app, chunks[0]);
 
     if app.show_help() {
@@ -205,12 +236,14 @@ fn draw_buffer_by_index(
 
     // Draw cursor if this is the current window
     if is_current {
-        use unicode_width::UnicodeWidthChar;
         if cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
             let screen_line = cursor_line - viewport_offset;
             let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
+
+            // Use accurate text width calculation for cross-platform compatibility
             let logical_prefix: String = line_text.chars().take(cursor_col).collect();
-            let display_col: usize = logical_prefix.chars().map(|c| c.width().unwrap_or(1)).sum();
+            let display_col: usize = app.text_calculator.str_width(&logical_prefix);
+
             let x = chunks[1].x + display_col as u16;
             let y = chunks[1].y + screen_line as u16;
 

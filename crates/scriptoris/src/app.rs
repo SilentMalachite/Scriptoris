@@ -36,6 +36,8 @@ pub struct App {
     macro_register: Option<char>,
     macro_keys: Vec<KeyEvent>,
     macro_registers: std::collections::HashMap<char, Vec<KeyEvent>>,
+    // Cross-platform text width calculator for accurate cursor positioning
+    pub text_calculator: crate::text_width::TextWidthCalculator,
 }
 
 // バッファ管理
@@ -315,7 +317,14 @@ enum UiMessageKind {
 impl App {
     pub async fn new() -> Result<Self> {
         let config = Config::load().await?;
-        let buffer_manager = BufferManager::new();
+        let mut buffer_manager = BufferManager::new();
+        
+        // Apply tab configuration to the initial buffer
+        buffer_manager.get_current_mut().content.set_tab_config(
+            config.editor.tab_size,
+            config.editor.use_spaces,
+        );
+        
         let initial_buffer_id = buffer_manager.get_current().id;
         let command_processor = CommandProcessor::new()?;
         Ok(Self {
@@ -331,6 +340,10 @@ impl App {
             macro_register: None,
             macro_keys: Vec::new(),
             macro_registers: std::collections::HashMap::new(),
+            // Initialize text calculator for cross-platform compatibility
+            text_calculator: crate::text_width::TextWidthCalculator::new()
+                .east_asian_aware(true)
+                .emoji_width(crate::text_width::EmojiWidth::Standard),
         })
     }
 
@@ -422,8 +435,9 @@ impl App {
             self.macro_keys.push(key);
         }
 
-        // Clear last_key if it's not 'd' and we're not pressing 'd'
+        // Clear last_key if it's not a command key and we're not pressing that key
         if key.code != KeyCode::Char('d')
+            && key.code != KeyCode::Char('y')
             && key.code != KeyCode::Char('q')
             && self.last_key.is_some()
         {
@@ -520,6 +534,9 @@ impl App {
             KeyCode::Char('x') => self.get_current_editor_mut().delete_char_forward(),
             KeyCode::Char('d') => self.handle_delete_command(),
 
+            // Yank operations
+            KeyCode::Char('y') => self.handle_yank_command(),
+
             // Paste
             KeyCode::Char('p') => {
                 self.get_current_editor_mut().paste();
@@ -572,6 +589,18 @@ impl App {
             self.last_key = None;
         } else {
             self.last_key = Some('d');
+        }
+    }
+
+    fn handle_yank_command(&mut self) {
+        // Vim yy command: yank line (second y press)
+        if self.last_key == Some('y') {
+            self.get_current_editor_mut().yank_line();
+            self.ui_state
+                .set_success_message("行をヤンクしました".to_string());
+            self.last_key = None;
+        } else {
+            self.last_key = Some('y');
         }
     }
 

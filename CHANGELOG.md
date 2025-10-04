@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-01-09
+
+### Fixed
+- **Code Quality**: Resolved all clippy warnings with `-D warnings` flag
+  - Use `enumerate()` for loop counter in lsp-plugin document.rs
+  - Replace redundant pattern matching with `is_err()` in enhanced_ui.rs
+  - Remove unnecessary `assert!(true)` statements from tests
+  - Collapse nested if statements in ui.rs for better readability
+- All 97 tests passing, clippy clean
+
 ## [0.1.3] - 2025-01-09
 
 ### Fixed

@@ -66,9 +66,8 @@ impl Document {
 
     pub fn offset_to_position(&self, offset: usize) -> Position {
         let mut byte_offset = 0;
-        let mut line_num = 0;
 
-        for line in self.content.lines() {
+        for (line_num, line) in self.content.lines().enumerate() {
             let line_len = line.len();
             if byte_offset + line_len >= offset {
                 // Position is within this line
@@ -96,7 +95,6 @@ impl Document {
                 };
             }
             byte_offset += line_len + 1; // +1 for newline
-            line_num += 1;
         }
 
         // If offset is beyond content, return end position

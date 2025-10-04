@@ -116,7 +116,7 @@ impl EnhancedUI {
             f.render_widget(title_bar, area);
         }));
 
-        if let Err(_) = result {
+        if result.is_err() {
             // Fallback to simple title bar
             Self::draw_fallback_title_bar(f, app, area);
         }
@@ -268,7 +268,7 @@ impl EnhancedUI {
             Self::draw_status_messages(f, app, chunks[2]);
         }));
 
-        if let Err(_) = result {
+        if result.is_err() {
             // Fallback to simple status bar
             Self::draw_fallback_status_bar(f, app, area);
         }
@@ -722,7 +722,6 @@ mod tests {
             .unwrap();
 
         // Test passed if no panic occurred
-        assert!(true);
     }
 
     #[tokio::test]
@@ -754,8 +753,6 @@ mod tests {
                 EnhancedUI::draw(f, &mut app);
             })
             .unwrap();
-
-        assert!(true);
     }
 
     #[test]
@@ -768,8 +765,6 @@ mod tests {
                 EnhancedUI::draw_fallback_error(f, f.size(), "Test error message");
             })
             .unwrap();
-
-        assert!(true);
     }
 
     #[tokio::test]
@@ -784,8 +779,6 @@ mod tests {
                 EnhancedUI::draw_fallback_title_bar(f, &app, area);
             })
             .unwrap();
-
-        assert!(true);
     }
 
     #[tokio::test]
@@ -800,7 +793,5 @@ mod tests {
                 EnhancedUI::draw_fallback_status_bar(f, &app, area);
             })
             .unwrap();
-
-        assert!(true);
     }
 }

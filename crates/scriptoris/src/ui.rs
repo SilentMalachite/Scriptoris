@@ -235,21 +235,19 @@ fn draw_buffer_by_index(
     f.render_widget(content_widget, chunks[1]);
 
     // Draw cursor if this is the current window
-    if is_current {
-        if cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
-            let screen_line = cursor_line - viewport_offset;
-            let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
+    if is_current && cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
+        let screen_line = cursor_line - viewport_offset;
+        let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
 
-            // Use accurate text width calculation for cross-platform compatibility
-            let logical_prefix: String = line_text.chars().take(cursor_col).collect();
-            let display_col: usize = app.text_calculator.str_width(&logical_prefix);
+        // Use accurate text width calculation for cross-platform compatibility
+        let logical_prefix: String = line_text.chars().take(cursor_col).collect();
+        let display_col: usize = app.text_calculator.str_width(&logical_prefix);
 
-            let x = chunks[1].x + display_col as u16;
-            let y = chunks[1].y + screen_line as u16;
+        let x = chunks[1].x + display_col as u16;
+        let y = chunks[1].y + screen_line as u16;
 
-            if x < chunks[1].x + chunks[1].width && y < chunks[1].y + chunks[1].height {
-                f.set_cursor(x, y);
-            }
+        if x < chunks[1].x + chunks[1].width && y < chunks[1].y + chunks[1].height {
+            f.set_cursor(x, y);
         }
     }
 }

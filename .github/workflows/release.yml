@@ -65,14 +65,16 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact_name: scriptoris
             asset_name: scriptoris-linux-x86_64
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            artifact_name: scriptoris
-            asset_name: scriptoris-linux-aarch64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: scriptoris.exe
-            asset_name: scriptoris-windows-x86_64.exe
+          # Disabled: cross-compilation strip issues
+          # - os: ubuntu-latest
+          #   target: aarch64-unknown-linux-gnu
+          #   artifact_name: scriptoris
+          #   asset_name: scriptoris-linux-aarch64
+          # Disabled: Windows build timeout issues
+          # - os: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   artifact_name: scriptoris.exe
+          #   asset_name: scriptoris-windows-x86_64.exe
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: scriptoris

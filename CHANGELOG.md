@@ -10,12 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.4] - 2025-01-09
 
 ### Fixed
+- **CI/CD**: Fixed GitHub Actions workflow configuration
+  - Added Cargo.lock to repository for consistent dependency versions
+  - Resolved ICU library version conflicts (requires Rust 1.82.0)
+  - Simplified workflow to support feature branches
+  - All platforms (Ubuntu/macOS/Windows) now passing
 - **Code Quality**: Resolved all clippy warnings with `-D warnings` flag
   - Use `enumerate()` for loop counter in lsp-plugin document.rs
   - Replace redundant pattern matching with `is_err()` in enhanced_ui.rs
   - Remove unnecessary `assert!(true)` statements from tests
   - Collapse nested if statements in ui.rs for better readability
 - All 97 tests passing, clippy clean
+
+### Changed
+- **Documentation**: Comprehensive update to reflect current implementation
+  - Updated README.md with all features (multi-buffer, sessions, LSP, macros)
+  - Expanded DEVELOPMENT.md with architecture details and testing guidelines
+  - Enhanced CONTRIBUTING.md with updated prerequisites and checklists
+  - All documentation now accurately reflects v0.1.4 status (~6500 LOC)
 
 ## [0.1.3] - 2025-01-09
 

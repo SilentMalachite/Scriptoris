@@ -15,9 +15,10 @@ Thank you for your interest in contributing to Scriptoris! This document provide
 
 ### Prerequisites
 
-- **Rust 1.70+** and Cargo
+- **Rust 1.82+** and Cargo
 - **Git** for version control
 - A **terminal emulator** that supports Unicode (for testing)
+- **Optional**: Language servers for LSP testing (rust-analyzer, typescript-language-server, pylsp)
 
 ### Getting Started
 
@@ -39,27 +40,32 @@ cargo run -- test.md
 ### Project Structure
 
 ```
-scriptoris/
+Scriptoris/
 ├── crates/
-│   ├── scriptoris/          # Main TUI application
+│   ├── scriptoris/          # Main TUI application (~6500 LOC)
 │   │   ├── src/
 │   │   │   ├── main.rs      # Entry point
-│   │   │   ├── app.rs       # Application state & logic
+│   │   │   ├── app.rs       # Application state & mode management
 │   │   │   ├── editor.rs    # Text editing with Ropey
 │   │   │   ├── ui.rs        # Ratatui UI rendering
+│   │   │   ├── enhanced_ui.rs # Advanced UI components
+│   │   │   ├── command_processor.rs  # Command execution
+│   │   │   ├── file_manager.rs       # File I/O
+│   │   │   ├── session_manager.rs    # Session persistence
+│   │   │   ├── highlight.rs # Syntax highlighting
+│   │   │   ├── text_width.rs # Unicode width calculations
 │   │   │   └── ...          # Other modules
 │   │   └── Cargo.toml
 │   ├── lsp-plugin/          # LSP integration
 │   │   ├── src/
 │   │   │   ├── lib.rs       # Main plugin logic
-│   │   │   ├── client.rs    # LSP client
-│   │   │   ├── server.rs    # LSP server wrapper
-│   │   │   └── ...          # LSP implementation
+│   │   │   ├── client.rs    # LSP client with Tower-LSP
+│   │   │   └── document.rs  # UTF-16 offset handling
 │   │   └── Cargo.toml
 │   └── mdcore/              # Markdown processing
 │       ├── src/
 │       │   ├── lib.rs       # Public API
-│       │   ├── markdown.rs  # Comrak integration
+│       │   ├── markdown.rs  # Comrak GFM integration
 │       │   └── sanitize.rs  # HTML sanitization
 │       └── Cargo.toml
 ├── .github/                 # GitHub Actions & templates
@@ -109,12 +115,14 @@ We aim for comprehensive test coverage. When adding new features:
 Before submitting a PR, please test:
 
 - [ ] Basic editing (insert, delete, navigate)
-- [ ] Vim keybindings work correctly
-- [ ] File operations (open, save, new)
-- [ ] Buffer management (multiple files)
-- [ ] Window splitting and navigation
-- [ ] LSP features (if applicable)
-- [ ] Unicode/Japanese character support
+- [ ] Vim keybindings work correctly (Normal/Insert/Visual/Command modes)
+- [ ] File operations (open `:e`, save `:w`, new)
+- [ ] Buffer management (multiple files with `:b`, `:bn`, `:bp`, `:bd`)
+- [ ] Window splitting and navigation (`:split`, `:vsplit`, `Ctrl+W` + hjkl)
+- [ ] Session management (`:session save/load`)
+- [ ] LSP features (completion `Ctrl+Space`, hover `Ctrl+K`, diagnostics)
+- [ ] Macro recording and playback (`q<reg>`, `@<reg>`)
+- [ ] Unicode/Japanese character support with proper grapheme handling
 - [ ] Cross-platform compatibility (if possible)
 
 ## 💡 Contributing Guidelines
@@ -186,17 +194,20 @@ docs(readme): update installation instructions
 
 ### Medium Complexity
 
-- **New Vim keybindings/commands**
+- **New Vim keybindings/commands** (text objects, motions)
+- **Enhanced buffer/window management**
 - **Theme and customization features**
-- **Performance optimizations**
+- **Performance optimizations** (large file handling)
 - **Additional LSP language support**
+- **Search and replace improvements**
 
 ### Advanced Features
 
-- **Plugin architecture enhancements**
-- **Advanced text editing features**
-- **Complex UI improvements**
-- **New major features (after discussion)**
+- **Plugin architecture enhancements** (dynamic loading, plugin API)
+- **Advanced text editing features** (complex macros, registers)
+- **Complex UI improvements** (floating windows, preview panes)
+- **Git integration** (status, diff, commit)
+- **New major features** (after discussion with maintainers)
 
 ## 🐛 Bug Reports
 

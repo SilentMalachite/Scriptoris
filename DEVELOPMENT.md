@@ -91,7 +91,7 @@ pip install python-lsp-server[all]
 ## Project Structure Deep Dive
 
 ```
-scriptoris/
+Scriptoris/
 ├── .github/                    # GitHub workflows and templates
 │   ├── workflows/
 │   │   ├── ci.yml             # Continuous integration
@@ -100,15 +100,19 @@ scriptoris/
 │   └── pull_request_template.md
 ├── assets/                    # Static assets (future use)
 ├── crates/                    # Rust workspace crates
-│   ├── scriptoris/           # Main TUI application
+│   ├── scriptoris/           # Main TUI application (~6500 LOC)
 │   │   ├── src/
 │   │   │   ├── main.rs       # Application entry point
-│   │   │   ├── app.rs        # Core application state
-│   │   │   ├── editor.rs     # Text editing with Ropey
+│   │   │   ├── app.rs        # Core application state & mode management
+│   │   │   ├── editor.rs     # Text editing with Ropey rope structure
 │   │   │   ├── ui.rs         # Terminal UI with Ratatui
-│   │   │   ├── command_processor.rs  # Command handling
-│   │   │   ├── file_manager.rs      # File I/O operations
+│   │   │   ├── enhanced_ui.rs # Advanced UI components (buffer list, etc.)
+│   │   │   ├── command_processor.rs  # Command execution engine
+│   │   │   ├── file_manager.rs      # File I/O operations with retry logic
+│   │   │   ├── session_manager.rs   # Session save/load functionality
 │   │   │   ├── config.rs     # Configuration management
+│   │   │   ├── highlight.rs  # Syntax highlighting with syntect
+│   │   │   ├── text_width.rs # Unicode grapheme cluster width calculations
 │   │   │   ├── ui_state.rs   # UI state management
 │   │   │   ├── status_manager.rs    # Status messages
 │   │   │   └── lib.rs        # Library exports
@@ -117,53 +121,67 @@ scriptoris/
 │   ├── lsp-plugin/           # LSP integration
 │   │   ├── src/
 │   │   │   ├── lib.rs        # Plugin interface
-│   │   │   ├── client.rs     # LSP client implementation
-│   │   │   ├── server.rs     # LSP server wrapper
-│   │   │   ├── document.rs   # Document synchronization
-│   │   │   ├── capabilities.rs      # LSP capabilities
-│   │   │   └── plugin.rs     # Scriptoris plugin trait impl
+│   │   │   ├── client.rs     # LSP client with Tower-LSP
+│   │   │   └── document.rs   # UTF-16 offset conversion & synchronization
 │   │   └── Cargo.toml
 │   └── mdcore/               # Markdown processing
 │       ├── src/
 │       │   ├── lib.rs        # Public API
-│       │   ├── markdown.rs   # Comrak integration
-│       │   ├── sanitize.rs   # HTML sanitization
+│       │   ├── markdown.rs   # Comrak GFM integration
+│       │   ├── sanitize.rs   # HTML sanitization with Ammonia
 │       │   └── tests.rs      # Test utilities
 │       └── Cargo.toml
 ├── scripts/                  # Build and development scripts
 ├── docs/                     # Additional documentation (future)
-├── Cargo.toml               # Workspace configuration
-├── rust-toolchain.toml      # Rust version specification
+├── Cargo.toml               # Workspace configuration (v0.1.4)
+├── rust-toolchain.toml      # Rust version specification (1.82.0)
 ├── README.md                # Project overview
 ├── CONTRIBUTING.md          # Contribution guide
 ├── CHANGELOG.md             # Version history
-├── LICENSE                  # MIT license
 ├── DEVELOPMENT.md           # This file
-└── RELEASE_PROCESS.md       # Release procedures
+├── RELEASE_PROCESS.md       # Release procedures
+├── CLAUDE.md                # AI assistant context
+├── knowledge.md             # Technical knowledge base
+└── LICENSE                  # MIT license
 ```
 
 ### Key Modules
 
 #### `scriptoris/src/app.rs`
 - **Purpose**: Core application state and logic
-- **Key types**: `App`, `Mode`, `BufferManager`, `WindowManager`
-- **Responsibilities**: Vim mode handling, buffer/window management, plugin coordination
+- **Key types**: `App`, `Mode`, `Buffer`, `Window`, `WindowLayout`
+- **Responsibilities**: Vim mode handling, buffer/window management, event coordination
+- **Features**: Multi-buffer support, split windows, session management, macro recording
 
 #### `scriptoris/src/editor.rs`
-- **Purpose**: Text editing functionality
+- **Purpose**: Text editing functionality with Ropey
 - **Key type**: `Editor`
-- **Technology**: Ropey rope data structure
-- **Features**: Cursor management, text operations, undo/redo
+- **Technology**: Ropey rope data structure for efficient editing
+- **Features**: Cursor management, text operations, undo/redo, visual selection
+- **Unicode**: Grapheme cluster-aware cursor positioning
 
-#### `scriptoris/src/ui.rs`
+#### `scriptoris/src/ui.rs` & `enhanced_ui.rs`
 - **Purpose**: Terminal user interface
-- **Technology**: Ratatui + Crossterm
-- **Responsibilities**: Rendering, layout, event handling
+- **Technology**: Ratatui 0.26+ + Crossterm 0.27+
+- **Responsibilities**: Rendering, layout, event handling, buffer list, status bar
+- **Features**: Syntax highlighting, line numbers, split window display
+
+#### `scriptoris/src/command_processor.rs`
+- **Purpose**: Command execution engine
+- **Features**: `:w`, `:q`, `:b`, `:split`, `:session` commands
+- **Design**: Static methods to avoid borrow checker conflicts
+
+#### `scriptoris/src/session_manager.rs`
+- **Purpose**: Workspace session persistence
+- **Format**: JSON-based session storage
+- **Features**: Save/load multiple buffers, window layouts, cursor positions
 
 #### `lsp-plugin/src/`
 - **Purpose**: Language Server Protocol integration
 - **Technology**: Tower-LSP, JSON-RPC
 - **Features**: Completion, hover, diagnostics, go-to-definition
+- **Supported**: Rust (rust-analyzer), TypeScript, Python
+- **Unicode**: UTF-16 offset handling for LSP protocol compliance
 
 #### `mdcore/src/`
 - **Purpose**: Markdown processing
@@ -399,23 +417,25 @@ async fn test_file_operations() {
 
 Before submitting PRs, test:
 
-- [ ] **Basic Editing**: Insert, delete, navigate
-- [ ] **Vim Keybindings**: All modal operations
-- [ ] **File Operations**: Open, save, new file
-- [ ] **Buffer Management**: Multiple files, switching
-- [ ] **Window Operations**: Split, navigate
-- [ ] **LSP Features**: Completion, hover, diagnostics
-- [ ] **Unicode Support**: Japanese characters, emojis
-- [ ] **Error Handling**: Invalid files, permission errors
-- [ ] **Performance**: Large files (10k+ lines)
+- [ ] **Basic Editing**: Insert, delete, navigate (h/j/k/l)
+- [ ] **Vim Keybindings**: All modal operations (Normal/Insert/Visual/Command)
+- [ ] **File Operations**: Open (`:e`), save (`:w`), new file
+- [ ] **Buffer Management**: Multiple files (`:b`, `:bn`, `:bp`), switching, closing (`:bd`)
+- [ ] **Window Operations**: Split (`:split`, `:vsplit`), navigate (`Ctrl+W` + hjkl)
+- [ ] **Session Management**: Save (`:session save`), load (`:session load`)
+- [ ] **LSP Features**: Completion (`Ctrl+Space`), hover (`Ctrl+K`), diagnostics
+- [ ] **Macro Recording**: Record (`q<reg>`), replay (`@<reg>`)
+- [ ] **Unicode Support**: Japanese characters, emojis, grapheme clusters
+- [ ] **Error Handling**: Invalid files, permission errors, disk full scenarios
+- [ ] **Performance**: Large files (10k+ lines), rapid input, window resizing
 
 ### Platform Testing
 
 Test on multiple platforms when possible:
 
-- **Linux**: Ubuntu 22.04+, Arch Linux
-- **macOS**: macOS 12+ (Intel and Apple Silicon)
-- **Windows**: Windows 10+
+- **Linux**: Ubuntu 22.04+, Fedora, Arch Linux
+- **macOS**: macOS 12+ (both Intel x86_64 and Apple Silicon aarch64)
+- **Windows**: Windows 10+, Windows 11
 
 ## Performance Considerations
 

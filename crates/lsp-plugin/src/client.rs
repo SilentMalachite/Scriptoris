@@ -116,7 +116,8 @@ impl LspClient {
                             }
                         }
                         None
-                    }).await;
+                    })
+                    .await;
 
                     match read_result {
                         Ok(Some(text)) => {
@@ -124,14 +125,20 @@ impl LspClient {
                                 // Handle response or notification
                                 if value.get("id").is_some() {
                                     // Response
-                                    if let Ok(response) = serde_json::from_value::<JsonRpcResponse>(value.clone()) {
-                                        if let Some(sender) = pending_requests.write().await.remove(&response.id) {
+                                    if let Ok(response) =
+                                        serde_json::from_value::<JsonRpcResponse>(value.clone())
+                                    {
+                                        if let Some(sender) =
+                                            pending_requests.write().await.remove(&response.id)
+                                        {
                                             let _ = sender.send(value).await;
                                         }
                                     }
                                 } else {
                                     // Notification - log but don't handle
-                                    if let Ok(notif) = serde_json::from_value::<JsonRpcNotification>(value) {
+                                    if let Ok(notif) =
+                                        serde_json::from_value::<JsonRpcNotification>(value)
+                                    {
                                         log::debug!("Received LSP notification: {}", notif.method);
                                     }
                                 }
@@ -232,7 +239,7 @@ impl LspClient {
 
         // Send shutdown request
         let result = self.send_request::<(), ()>("shutdown", ()).await;
-        
+
         // Send exit notification
         let _ = self.send_notification("exit", ()).await;
 

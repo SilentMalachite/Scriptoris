@@ -1,3 +1,5 @@
+[DEPRECATED] This crate-level README is outdated and kept for historical context. Please refer to the root-level README.md for the up-to-date documentation, features, configuration, and usage of Scriptoris.
+
 # Scriptoris - Terminal-based Markdown Editor
 
 A lightweight, terminal-based Markdown editor with nano-style keybindings and JSON configuration.
@@ -57,8 +59,8 @@ scriptoris [filename]
 ## Configuration
 
 Configuration is stored in JSON format at:
-- **Linux/macOS**: `~/.config/scriptoris-tui/config.json`
-- **Windows**: `%APPDATA%\scriptoris-tui\config.json`
+- **Linux/macOS**: `~/.config/scriptoris/config.json`
+- **Windows**: `%APPDATA%\scriptoris\config.json`
 
 ### Example Configuration
 

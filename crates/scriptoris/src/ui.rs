@@ -235,7 +235,10 @@ fn draw_buffer_by_index(
     f.render_widget(content_widget, chunks[1]);
 
     // Draw cursor if this is the current window
-    if is_current && cursor_line >= viewport_offset && cursor_line < viewport_offset + viewport_lines.len() {
+    if is_current
+        && cursor_line >= viewport_offset
+        && cursor_line < viewport_offset + viewport_lines.len()
+    {
         let screen_line = cursor_line - viewport_offset;
         let line_text = viewport_lines.get(screen_line).cloned().unwrap_or_default();
 

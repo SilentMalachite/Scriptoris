@@ -46,14 +46,19 @@ impl CommandProcessor {
                 }),
                 Err(e) => {
                     log::error!("Failed to initialize session manager: {}", e);
-                    Err(anyhow::anyhow!("セッションマネージャーの初期化に失敗しました: {}", e))
+                    Err(anyhow::anyhow!(
+                        "セッションマネージャーの初期化に失敗しました: {}",
+                        e
+                    ))
                 }
             }
         }) {
             Ok(result) => result,
             Err(e) => {
                 log::error!("Panic during command processor initialization: {:?}", e);
-                Err(anyhow::anyhow!("コマンドプロセッサーの初期化中にパニックが発生しました"))
+                Err(anyhow::anyhow!(
+                    "コマンドプロセッサーの初期化中にパニックが発生しました"
+                ))
             }
         }
     }
@@ -86,11 +91,14 @@ impl CommandProcessor {
         // Check for potentially dangerous commands
         if cmd.contains("..") || cmd.contains('~') && cmd.contains("rm") {
             log::warn!("Potentially dangerous command detected: {}", cmd);
-            return Err(anyhow::anyhow!("安全上の理由によりこのコマンドは許可されていません"));
+            return Err(anyhow::anyhow!(
+                "安全上の理由によりこのコマンドは許可されていません"
+            ));
         }
 
         // Execute command with error handling
-        self.execute_command_safe(cmd, editor, file_manager, config, should_quit).await
+        self.execute_command_safe(cmd, editor, file_manager, config, should_quit)
+            .await
     }
 
     async fn execute_command_safe(
@@ -124,7 +132,9 @@ impl CommandProcessor {
         }
 
         // Process command parts with error handling
-        let result = self.process_command_parts(&parts, editor, file_manager, config, should_quit).await;
+        let result = self
+            .process_command_parts(&parts, editor, file_manager, config, should_quit)
+            .await;
 
         // Log command execution result for debugging
         match &result {
@@ -156,12 +166,21 @@ impl CommandProcessor {
         match parts[0] {
             "w" => self.handle_save_command(parts, editor, file_manager).await,
             "q" | "q!" => self.handle_quit_command(parts, editor, should_quit),
-            "wq" => self.handle_save_quit_command(editor, file_manager, should_quit).await,
+            "wq" => {
+                self.handle_save_quit_command(editor, file_manager, should_quit)
+                    .await
+            }
             "e" => self.handle_edit_command(parts, file_manager, editor).await,
             "split" | "sp" | "vsplit" | "vsp" | "bnext" | "bn" | "bprev" | "bp" | "buffers"
             | "ls" | "bdelete" | "bd" => self.handle_window_buffer_commands(parts[0]),
-            "mksession" => self.handle_session_save_command(parts, editor, file_manager, config).await,
-            "source" => self.handle_session_load_command(parts, file_manager, editor, config).await,
+            "mksession" => {
+                self.handle_session_save_command(parts, editor, file_manager, config)
+                    .await
+            }
+            "source" => {
+                self.handle_session_load_command(parts, file_manager, editor, config)
+                    .await
+            }
             "sessions" => self.handle_session_list_command().await,
             "delsession" => self.handle_session_delete_command(parts).await,
             "set" => self.handle_set_command(parts, config).await,
@@ -199,7 +218,9 @@ impl CommandProcessor {
                 }
             }
         } else {
-            Err(anyhow::anyhow!("ファイル名が指定されていません (:w <filename> で名前を付けて保存)"))
+            Err(anyhow::anyhow!(
+                "ファイル名が指定されていません (:w <filename> で名前を付けて保存)"
+            ))
         }
     }
 
@@ -297,7 +318,11 @@ impl CommandProcessor {
         let session_name = parts[1];
         log::info!("Saving session: {}", session_name);
 
-        match self.session_manager.save_session(session_name, editor, file_manager, config).await {
+        match self
+            .session_manager
+            .save_session(session_name, editor, file_manager, config)
+            .await
+        {
             Ok(_) => Ok(format!("セッション '{}' を保存しました", session_name)),
             Err(e) => {
                 log::error!("Session save failed: {}", e);
@@ -330,7 +355,10 @@ impl CommandProcessor {
                         }
                         Err(e) => {
                             log::error!("Failed to open session file: {}", e);
-                            return Err(anyhow::anyhow!("セッションのファイルを開けませんでした: {}", e));
+                            return Err(anyhow::anyhow!(
+                                "セッションのファイルを開けませんでした: {}",
+                                e
+                            ));
                         }
                     }
                 } else {
@@ -346,9 +374,10 @@ impl CommandProcessor {
                 config.editor.tab_size = session_data.editor_config.tab_size;
                 config.editor.use_spaces = session_data.editor_config.use_spaces;
                 config.editor.line_numbers = session_data.editor_config.line_numbers;
-                config.editor.highlight_current_line = session_data.editor_config.highlight_current_line;
+                config.editor.highlight_current_line =
+                    session_data.editor_config.highlight_current_line;
                 config.editor.wrap_lines = session_data.editor_config.wrap_lines;
-                
+
                 // Apply tab config to editor
                 editor.set_tab_config(config.editor.tab_size, config.editor.use_spaces);
 
@@ -425,7 +454,10 @@ impl CommandProcessor {
             }
             Err(e) => {
                 log::error!("Failed to save config after theme change: {}", e);
-                Ok(format!("テーマを '{}' に設定しました (設定の保存に失敗)", theme))
+                Ok(format!(
+                    "テーマを '{}' に設定しました (設定の保存に失敗)",
+                    theme
+                ))
             }
         }
     }

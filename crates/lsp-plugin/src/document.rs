@@ -43,15 +43,13 @@ impl Document {
                 // Calculate offset within this line using grapheme clusters
                 let mut utf16_count = 0;
                 let mut byte_count = 0;
-                
+
                 for grapheme in line.graphemes(true) {
                     if utf16_count >= utf16_char_idx {
                         return Some(byte_offset + byte_count);
                     }
                     // Count UTF-16 code units for this grapheme
-                    let grapheme_utf16_len: usize = grapheme.chars()
-                        .map(|c| c.len_utf16())
-                        .sum();
+                    let grapheme_utf16_len: usize = grapheme.chars().map(|c| c.len_utf16()).sum();
                     utf16_count += grapheme_utf16_len;
                     byte_count += grapheme.len();
                 }
@@ -76,15 +74,13 @@ impl Document {
                 // Convert byte offset to UTF-16 code units using grapheme clusters
                 let mut utf16_count = 0;
                 let mut byte_count = 0;
-                
+
                 for grapheme in line.graphemes(true) {
                     if byte_count >= remaining {
                         break;
                     }
                     // Count UTF-16 code units for this grapheme
-                    let grapheme_utf16_len: usize = grapheme.chars()
-                        .map(|c| c.len_utf16())
-                        .sum();
+                    let grapheme_utf16_len: usize = grapheme.chars().map(|c| c.len_utf16()).sum();
                     utf16_count += grapheme_utf16_len;
                     byte_count += grapheme.len();
                 }
@@ -180,82 +176,226 @@ mod tests {
     #[test]
     fn test_get_position_offset_ascii() {
         let doc = create_test_doc("Hello\nWorld");
-        
+
         // First line
-        assert_eq!(doc.get_position_offset(Position { line: 0, character: 0 }), Some(0));
-        assert_eq!(doc.get_position_offset(Position { line: 0, character: 5 }), Some(5));
-        
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 0,
+                character: 0
+            }),
+            Some(0)
+        );
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 0,
+                character: 5
+            }),
+            Some(5)
+        );
+
         // Second line
-        assert_eq!(doc.get_position_offset(Position { line: 1, character: 0 }), Some(6));
-        assert_eq!(doc.get_position_offset(Position { line: 1, character: 5 }), Some(11));
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 1,
+                character: 0
+            }),
+            Some(6)
+        );
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 1,
+                character: 5
+            }),
+            Some(11)
+        );
     }
 
     #[test]
     fn test_get_position_offset_japanese() {
         let doc = create_test_doc("こんにちは\n世界");
-        
+
         // Japanese characters: each char is 3 bytes but 1 UTF-16 code unit
         // "こ" = 3 bytes, 1 UTF-16 unit
-        assert_eq!(doc.get_position_offset(Position { line: 0, character: 0 }), Some(0));
-        assert_eq!(doc.get_position_offset(Position { line: 0, character: 1 }), Some(3));
-        assert_eq!(doc.get_position_offset(Position { line: 0, character: 5 }), Some(15));
-        
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 0,
+                character: 0
+            }),
+            Some(0)
+        );
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 0,
+                character: 1
+            }),
+            Some(3)
+        );
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 0,
+                character: 5
+            }),
+            Some(15)
+        );
+
         // Second line
-        assert_eq!(doc.get_position_offset(Position { line: 1, character: 0 }), Some(16));
-        assert_eq!(doc.get_position_offset(Position { line: 1, character: 2 }), Some(22));
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 1,
+                character: 0
+            }),
+            Some(16)
+        );
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 1,
+                character: 2
+            }),
+            Some(22)
+        );
     }
 
     #[test]
     fn test_get_position_offset_emoji() {
         let doc = create_test_doc("Hello😀World");
-        
+
         // Emoji "😀" is 4 bytes and 2 UTF-16 code units
-        assert_eq!(doc.get_position_offset(Position { line: 0, character: 0 }), Some(0));
-        assert_eq!(doc.get_position_offset(Position { line: 0, character: 5 }), Some(5));
-        assert_eq!(doc.get_position_offset(Position { line: 0, character: 7 }), Some(9)); // After emoji
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 0,
+                character: 0
+            }),
+            Some(0)
+        );
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 0,
+                character: 5
+            }),
+            Some(5)
+        );
+        assert_eq!(
+            doc.get_position_offset(Position {
+                line: 0,
+                character: 7
+            }),
+            Some(9)
+        ); // After emoji
     }
 
     #[test]
     fn test_offset_to_position_ascii() {
         let doc = create_test_doc("Hello\nWorld");
-        
-        assert_eq!(doc.offset_to_position(0), Position { line: 0, character: 0 });
-        assert_eq!(doc.offset_to_position(5), Position { line: 0, character: 5 });
-        assert_eq!(doc.offset_to_position(6), Position { line: 1, character: 0 });
-        assert_eq!(doc.offset_to_position(11), Position { line: 1, character: 5 });
+
+        assert_eq!(
+            doc.offset_to_position(0),
+            Position {
+                line: 0,
+                character: 0
+            }
+        );
+        assert_eq!(
+            doc.offset_to_position(5),
+            Position {
+                line: 0,
+                character: 5
+            }
+        );
+        assert_eq!(
+            doc.offset_to_position(6),
+            Position {
+                line: 1,
+                character: 0
+            }
+        );
+        assert_eq!(
+            doc.offset_to_position(11),
+            Position {
+                line: 1,
+                character: 5
+            }
+        );
     }
 
     #[test]
     fn test_offset_to_position_japanese() {
         let doc = create_test_doc("こんにちは\n世界");
-        
-        assert_eq!(doc.offset_to_position(0), Position { line: 0, character: 0 });
-        assert_eq!(doc.offset_to_position(3), Position { line: 0, character: 1 });
-        assert_eq!(doc.offset_to_position(15), Position { line: 0, character: 5 });
-        assert_eq!(doc.offset_to_position(16), Position { line: 1, character: 0 });
+
+        assert_eq!(
+            doc.offset_to_position(0),
+            Position {
+                line: 0,
+                character: 0
+            }
+        );
+        assert_eq!(
+            doc.offset_to_position(3),
+            Position {
+                line: 0,
+                character: 1
+            }
+        );
+        assert_eq!(
+            doc.offset_to_position(15),
+            Position {
+                line: 0,
+                character: 5
+            }
+        );
+        assert_eq!(
+            doc.offset_to_position(16),
+            Position {
+                line: 1,
+                character: 0
+            }
+        );
     }
 
     #[test]
     fn test_offset_to_position_emoji() {
         let doc = create_test_doc("Hello😀World");
-        
-        assert_eq!(doc.offset_to_position(0), Position { line: 0, character: 0 });
-        assert_eq!(doc.offset_to_position(5), Position { line: 0, character: 5 });
-        assert_eq!(doc.offset_to_position(9), Position { line: 0, character: 7 }); // After emoji
+
+        assert_eq!(
+            doc.offset_to_position(0),
+            Position {
+                line: 0,
+                character: 0
+            }
+        );
+        assert_eq!(
+            doc.offset_to_position(5),
+            Position {
+                line: 0,
+                character: 5
+            }
+        );
+        assert_eq!(
+            doc.offset_to_position(9),
+            Position {
+                line: 0,
+                character: 7
+            }
+        ); // After emoji
     }
 
     #[test]
     fn test_apply_text_edit() {
         let mut doc = create_test_doc("Hello World");
-        
+
         let edit = TextEdit {
             range: Range {
-                start: Position { line: 0, character: 6 },
-                end: Position { line: 0, character: 11 },
+                start: Position {
+                    line: 0,
+                    character: 6,
+                },
+                end: Position {
+                    line: 0,
+                    character: 11,
+                },
             },
             new_text: "Rust".to_string(),
         };
-        
+
         doc.apply_text_edit(edit);
         assert_eq!(doc.content, "Hello Rust");
     }
@@ -263,13 +403,19 @@ mod tests {
     #[test]
     fn test_get_word_at_position() {
         let doc = create_test_doc("hello_world test");
-        
+
         assert_eq!(
-            doc.get_word_at_position(Position { line: 0, character: 0 }),
+            doc.get_word_at_position(Position {
+                line: 0,
+                character: 0
+            }),
             Some("hello_world".to_string())
         );
         assert_eq!(
-            doc.get_word_at_position(Position { line: 0, character: 12 }),
+            doc.get_word_at_position(Position {
+                line: 0,
+                character: 12
+            }),
             Some("test".to_string())
         );
     }

@@ -3,8 +3,8 @@
 //! 日本語・東アジア文字の正確な表示幅計算と、
 //! 各プラットフォームでの互換性を提供します。
 
-use unicode_width::UnicodeWidthChar;
 use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthChar;
 
 /// 文字幅計算用の構造体
 #[derive(Debug, Clone)]
@@ -177,8 +177,11 @@ impl TextWidthCalculator {
             // その他の絵文字
             self.is_variation_selector(c) ||
             self.is_zero_width_joiner(c)
-        }) || text.contains("🏻") || text.contains("🏼") || text.contains("🏽") ||
-             text.contains("🏾") || text.contains("🏿")
+        }) || text.contains("🏻")
+            || text.contains("🏼")
+            || text.contains("🏽")
+            || text.contains("🏾")
+            || text.contains("🏿")
     }
 
     /// バリエーションセレクタかどうか
@@ -192,14 +195,18 @@ impl TextWidthCalculator {
     }
 
     /// 幅の広い絵文字シーケンスかどうか
-    fn is_wide_emoji_sequence(&self, c: char, chars: &mut std::iter::Peekable<std::str::Chars>) -> bool {
+    fn is_wide_emoji_sequence(
+        &self,
+        c: char,
+        chars: &mut std::iter::Peekable<std::str::Chars>,
+    ) -> bool {
         if c == '\u{200D}' {
             // ZWJの後に続く文字を確認
             if let Some(&next_c) = chars.peek() {
                 let code = next_c as u32;
                 (0x1F600..=0x1F64F).contains(&code) || // Emoticons
                 (0x1F300..=0x1F5FF).contains(&code) || // Misc Symbols
-                (0x1F680..=0x1F6FF).contains(&code)    // Transport
+                (0x1F680..=0x1F6FF).contains(&code) // Transport
             } else {
                 false
             }
@@ -360,7 +367,7 @@ mod tests {
         // "世" = 1 char, width 2 (fullwidth)
         // "界" = 1 char, width 2 (fullwidth)
         // Total: 7 chars, width 9
-        
+
         assert_eq!(calc.str_width("Hello"), 5);
         assert_eq!(calc.str_width("世"), 2);
         assert_eq!(calc.str_width("界"), 2);

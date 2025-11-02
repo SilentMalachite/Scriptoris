@@ -90,7 +90,10 @@ impl FileManager {
                         format!("ファイルが見つかりません: {}", path.display())
                     }
                     std::io::ErrorKind::InvalidData => {
-                        format!("ファイルのエンコーディングが無効です (UTF-8ではありません): {}", path.display())
+                        format!(
+                            "ファイルのエンコーディングが無効です (UTF-8ではありません): {}",
+                            path.display()
+                        )
                     }
                     _ => {
                         format!("ファイル読み込みエラー: {} - {}", path.display(), e)
@@ -158,10 +161,16 @@ impl FileManager {
                         if !should_retry || attempt >= MAX_ATTEMPTS {
                             let error_msg = match e.kind() {
                                 std::io::ErrorKind::PermissionDenied => {
-                                    format!("ファイルへの書き込み権限がありません: {}", path.display())
+                                    format!(
+                                        "ファイルへの書き込み権限がありません: {}",
+                                        path.display()
+                                    )
                                 }
                                 std::io::ErrorKind::WriteZero => {
-                                    format!("ディスク容量が不足している可能性があります: {}", path.display())
+                                    format!(
+                                        "ディスク容量が不足している可能性があります: {}",
+                                        path.display()
+                                    )
                                 }
                                 _ => {
                                     format!("ファイル書き込みエラー: {} - {}", path.display(), e)
@@ -171,15 +180,22 @@ impl FileManager {
                         }
 
                         // Wait before retry with exponential backoff
-                        let backoff = tokio::time::Duration::from_millis(100 * (1 << (attempt - 1)));
+                        let backoff =
+                            tokio::time::Duration::from_millis(100 * (1 << (attempt - 1)));
                         tokio::time::sleep(backoff).await;
-                        log::warn!("Save attempt {} failed for {}, retrying...", attempt, path.display());
+                        log::warn!(
+                            "Save attempt {} failed for {}, retrying...",
+                            attempt,
+                            path.display()
+                        );
                     }
                 }
             }
 
             // This should never be reached, but just in case
-            Err(anyhow::anyhow!("保存に失敗しました（最大試行回数に達しました）"))
+            Err(anyhow::anyhow!(
+                "保存に失敗しました（最大試行回数に達しました）"
+            ))
         } else {
             Err(anyhow::anyhow!("ファイルパスが設定されていません"))
         }
@@ -239,7 +255,11 @@ impl FileManager {
                 self.is_readonly = false;
                 editor.mark_saved();
                 log::info!("Successfully saved file as: {}", path.display());
-                Ok(format!("{} 行を '{}' に書き込みました", editor.line_count(), path.display()))
+                Ok(format!(
+                    "{} 行を '{}' に書き込みました",
+                    editor.line_count(),
+                    path.display()
+                ))
             }
             Err(e) => {
                 let error_msg = match e.kind() {
@@ -247,7 +267,10 @@ impl FileManager {
                         format!("ファイルへの書き込み権限がありません: {}", path.display())
                     }
                     std::io::ErrorKind::WriteZero => {
-                        format!("ディスク容量が不足している可能性があります: {}", path.display())
+                        format!(
+                            "ディスク容量が不足している可能性があります: {}",
+                            path.display()
+                        )
                     }
                     _ => {
                         format!("ファイル書き込みエラー: {} - {}", path.display(), e)

@@ -1,7 +1,7 @@
 use ropey::Rope;
 use std::cmp;
 
-use crate::text_width::{TextWidthCalculator, EmojiWidth};
+use crate::text_width::{EmojiWidth, TextWidthCalculator};
 
 #[derive(Clone)]
 pub struct Editor {
@@ -156,7 +156,8 @@ impl Editor {
 
     pub fn insert_char(&mut self, c: char) {
         // Handle memory constraints gracefully
-        if self.rope.len_chars() > 1_000_000 { // 1 million characters
+        if self.rope.len_chars() > 1_000_000 {
+            // 1 million characters
             log::warn!("Document size approaching limit, insert may be slow");
         }
 
@@ -333,7 +334,9 @@ impl Editor {
         let line_start = self.rope.line_to_char(line);
         if let Some(line_text) = self.rope.get_line(line) {
             // text_calculatorを使用して表示カラム位置から文字インデックスに変換
-            let char_offset = self.text_calculator.col_to_char_index(&line_text.to_string(), col);
+            let char_offset = self
+                .text_calculator
+                .col_to_char_index(&line_text.to_string(), col);
             line_start + char_offset
         } else {
             line_start + col
@@ -347,7 +350,9 @@ impl Editor {
 
         if let Some(line_text) = self.rope.get_line(line) {
             // text_calculatorを使用して文字インデックスから表示カラム位置に変換
-            let col = self.text_calculator.char_index_to_col(&line_text.to_string(), char_offset);
+            let col = self
+                .text_calculator
+                .char_index_to_col(&line_text.to_string(), char_offset);
             (line, col)
         } else {
             (line, char_offset)
@@ -856,7 +861,7 @@ mod tests {
     fn test_japanese_text_insertion() {
         let mut editor = Editor::new();
         editor.set_content("こんにちは".to_string());
-        
+
         assert_eq!(editor.get_content(), "こんにちは");
         assert_eq!(editor.line_count(), 1);
     }
@@ -865,7 +870,7 @@ mod tests {
     fn test_japanese_text_deletion() {
         let mut editor = Editor::new();
         editor.set_content("こんにちは世界".to_string());
-        
+
         // Verify Japanese text is handled
         assert_eq!(editor.line_count(), 1);
         let content = editor.get_content();
@@ -876,21 +881,21 @@ mod tests {
     #[test]
     fn test_mixed_text_editing() {
         let mut editor = Editor::new();
-        
+
         // Mixed Japanese and English
         let content = "Hello世界Test";
         editor.set_content(content.to_string());
-        
+
         // Test cursor movement
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
         editor.move_cursor_right();
-        
+
         // Insert text at cursor position
         editor.insert_char('!');
-        
+
         assert!(editor.get_content().contains("!"));
     }
 
@@ -898,7 +903,7 @@ mod tests {
     fn test_emoji_editing() {
         let mut editor = Editor::new();
         editor.set_content("😀🎉".to_string());
-        
+
         assert_eq!(editor.get_content(), "😀🎉");
         assert_eq!(editor.line_count(), 1);
     }
@@ -907,7 +912,7 @@ mod tests {
     fn test_fullwidth_characters() {
         let mut editor = Editor::new();
         editor.set_content("全角文字".to_string());
-        
+
         // Fullwidth characters should be handled correctly
         assert_eq!(editor.line_count(), 1);
         assert_eq!(editor.get_content(), "全角文字");

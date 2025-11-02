@@ -103,7 +103,10 @@ impl Config {
                             Ok(mut config) => {
                                 // Validate config values
                                 config.validate()?;
-                                log::info!("Successfully loaded config from: {}", config_path.display());
+                                log::info!(
+                                    "Successfully loaded config from: {}",
+                                    config_path.display()
+                                );
                                 return Ok(config);
                             }
                             Err(json_err) => {
@@ -114,7 +117,10 @@ impl Config {
                                 if let Err(e) = tokio::fs::copy(&config_path, &backup_path).await {
                                     log::warn!("Failed to backup broken config: {}", e);
                                 } else {
-                                    log::info!("Backed up broken config to: {}", backup_path.display());
+                                    log::info!(
+                                        "Backed up broken config to: {}",
+                                        backup_path.display()
+                                    );
                                 }
 
                                 // Use default config
@@ -149,7 +155,10 @@ impl Config {
             if let Some(parent) = config_path.parent() {
                 match tokio::fs::create_dir_all(parent).await {
                     Ok(_) => {
-                        log::debug!("Config directory exists or was created: {}", parent.display());
+                        log::debug!(
+                            "Config directory exists or was created: {}",
+                            parent.display()
+                        );
                     }
                     Err(e) => {
                         return Err(anyhow::anyhow!(
@@ -163,25 +172,20 @@ impl Config {
 
             // Serialize and save with error handling
             match serde_json::to_string_pretty(&config_to_save) {
-                Ok(content) => {
-                    match tokio::fs::write(&config_path, content).await {
-                        Ok(_) => {
-                            log::info!("Successfully saved config to: {}", config_path.display());
-                        }
-                        Err(e) => {
-                            return Err(anyhow::anyhow!(
-                                "設定ファイルの書き込みに失敗しました: {} - {}",
-                                config_path.display(),
-                                e
-                            ));
-                        }
+                Ok(content) => match tokio::fs::write(&config_path, content).await {
+                    Ok(_) => {
+                        log::info!("Successfully saved config to: {}", config_path.display());
                     }
-                }
+                    Err(e) => {
+                        return Err(anyhow::anyhow!(
+                            "設定ファイルの書き込みに失敗しました: {} - {}",
+                            config_path.display(),
+                            e
+                        ));
+                    }
+                },
                 Err(e) => {
-                    return Err(anyhow::anyhow!(
-                        "設定のシリアライズに失敗しました: {}",
-                        e
-                    ));
+                    return Err(anyhow::anyhow!("設定のシリアライズに失敗しました: {}", e));
                 }
             }
         }

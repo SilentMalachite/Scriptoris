@@ -325,13 +325,13 @@ impl App {
     pub async fn new() -> Result<Self> {
         let config = Config::load().await?;
         let mut buffer_manager = BufferManager::new();
-        
+
         // Apply tab configuration to the initial buffer
-        buffer_manager.get_current_mut().content.set_tab_config(
-            config.editor.tab_size,
-            config.editor.use_spaces,
-        );
-        
+        buffer_manager
+            .get_current_mut()
+            .content
+            .set_tab_config(config.editor.tab_size, config.editor.use_spaces);
+
         let initial_buffer_id = buffer_manager.get_current().id;
         let command_processor = CommandProcessor::new()?;
 
@@ -925,7 +925,12 @@ impl App {
 
     #[cfg(feature = "lsp")]
     #[allow(dead_code)]
-    pub async fn notify_lsp_document_changed(&self, path: &std::path::Path, content: &str, version: i32) {
+    pub async fn notify_lsp_document_changed(
+        &self,
+        path: &std::path::Path,
+        content: &str,
+        version: i32,
+    ) {
         if let Some(ref lsp_plugin) = self.lsp_plugin {
             if let Err(e) = lsp_plugin
                 .update_document(path.to_path_buf(), content.to_string(), version)
@@ -938,16 +943,29 @@ impl App {
 
     #[cfg(feature = "lsp")]
     #[allow(dead_code)]
-    pub async fn get_lsp_completions(&self, path: &std::path::Path, line: u32, character: u32) -> Vec<lsp_types::CompletionItem> {
+    pub async fn get_lsp_completions(
+        &self,
+        path: &std::path::Path,
+        line: u32,
+        character: u32,
+    ) -> Vec<lsp_types::CompletionItem> {
         if let Some(ref lsp_plugin) = self.lsp_plugin {
-            lsp_plugin.get_completions(path.to_path_buf(), line, character).await.unwrap_or_default()
+            lsp_plugin
+                .get_completions(path.to_path_buf(), line, character)
+                .await
+                .unwrap_or_default()
         } else {
             vec![]
         }
     }
 
     #[cfg(not(feature = "lsp"))]
-    pub async fn get_lsp_completions(&self, _path: &std::path::Path, _line: u32, _character: u32) -> Vec<()> {
+    pub async fn get_lsp_completions(
+        &self,
+        _path: &std::path::Path,
+        _line: u32,
+        _character: u32,
+    ) -> Vec<()> {
         vec![]
     }
 

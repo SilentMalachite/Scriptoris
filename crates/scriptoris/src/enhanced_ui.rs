@@ -13,9 +13,8 @@ pub struct EnhancedUI;
 impl EnhancedUI {
     pub fn draw(f: &mut Frame, app: &mut App) {
         // Enhanced UI draw with comprehensive error handling
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            Self::draw_internal(f, app)
-        }));
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Self::draw_internal(f, app)));
 
         if let Err(panic_info) = result {
             log::error!("Enhanced UI panic: {:?}", panic_info);

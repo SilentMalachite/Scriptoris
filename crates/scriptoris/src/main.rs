@@ -86,11 +86,11 @@ async fn main() -> Result<()> {
 
                 // Notify LSP plugin of document opening
                 #[cfg(feature = "lsp")]
-                app.notify_lsp_document_opened(&file_path, &content_str).await;
+                app.notify_lsp_document_opened(&file_path, &content_str)
+                    .await;
 
-                app.ui_state.set_info_message(
-                    format!("ファイルを読み込みました: {}", args[1])
-                );
+                app.ui_state
+                    .set_info_message(format!("ファイルを読み込みました: {}", args[1]));
                 log::info!("Successfully loaded file from command line: {}", args[1]);
             }
             Err(e) => {
@@ -100,9 +100,10 @@ async fn main() -> Result<()> {
 
                 // If it's a critical error (not file not found), show it prominently
                 if !e.to_string().contains("見つかりません") {
-                    app.ui_state.set_warning_message(
-                        format!("続行しますが、ファイル '{}' は読み込まれませんでした", args[1])
-                    );
+                    app.ui_state.set_warning_message(format!(
+                        "続行しますが、ファイル '{}' は読み込まれませんでした",
+                        args[1]
+                    ));
                 }
             }
         }
@@ -145,11 +146,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: app::App) -> R
     // Main application loop with safe error handling
     loop {
         // Draw UI
-        if let Err(e) = terminal.draw(|f| {
-            match app.config.ui_mode {
-                config::UIMode::Enhanced => enhanced_ui::EnhancedUI::draw(f, &mut app),
-                config::UIMode::Standard => ui::draw(f, &mut app),
-            }
+        if let Err(e) = terminal.draw(|f| match app.config.ui_mode {
+            config::UIMode::Enhanced => enhanced_ui::EnhancedUI::draw(f, &mut app),
+            config::UIMode::Standard => ui::draw(f, &mut app),
         }) {
             log::error!("Terminal draw error: {}", e);
             // Continue running despite draw errors
@@ -170,7 +169,8 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: app::App) -> R
                 Event::Key(key) => {
                     if let Err(e) = handle_key_event_safe(key, &mut app).await {
                         log::error!("Key event handling error: {}", e);
-                        app.ui_state.set_error_message(format!("キー処理エラー: {}", e));
+                        app.ui_state
+                            .set_error_message(format!("キー処理エラー: {}", e));
                     }
                 }
                 Event::Resize(_, _) => {
@@ -191,9 +191,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: app::App) -> R
 
 async fn handle_key_event_safe(key: crossterm::event::KeyEvent, app: &mut app::App) -> Result<()> {
     // Handle Ctrl+C as emergency exit
-    if key.code == KeyCode::Char('c')
-        && key.modifiers.contains(event::KeyModifiers::CONTROL)
-    {
+    if key.code == KeyCode::Char('c') && key.modifiers.contains(event::KeyModifiers::CONTROL) {
         log::info!("Emergency exit requested via Ctrl+C");
         if app.is_modified() {
             // Prompt to save before exiting
@@ -204,15 +202,13 @@ async fn handle_key_event_safe(key: crossterm::event::KeyEvent, app: &mut app::A
             app.quit();
         }
         return Ok(());
-    } else if key.code == KeyCode::Char('x')
-        && key.modifiers.contains(event::KeyModifiers::CONTROL)
+    } else if key.code == KeyCode::Char('x') && key.modifiers.contains(event::KeyModifiers::CONTROL)
     {
         log::info!("Nano-style exit requested via Ctrl+X");
         // Ctrl+X for nano-like users - redirect to vim :q
         if app.is_modified() {
             app.ui_state.set_info_message(
-                "Save changes? (:wq to save and quit, :q! to quit without saving)"
-                    .to_string(),
+                "Save changes? (:wq to save and quit, :q! to quit without saving)".to_string(),
             );
         } else {
             app.quit();

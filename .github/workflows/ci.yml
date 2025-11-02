@@ -15,7 +15,6 @@ env:
 
 jobs:
   test:
-    if: github.event_name == 'push'
     name: Test Suite
     runs-on: ${{ matrix.os }}
     strategy:
@@ -68,7 +67,6 @@ jobs:
       run: cargo doc --no-deps --all-features
 
   msrv:
-    if: github.event_name == 'push'
     name: Minimum Supported Rust Version
     runs-on: ubuntu-latest
     steps:
@@ -81,7 +79,6 @@ jobs:
       run: cargo check --all-features
 
   security:
-    if: github.event_name == 'push'
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
@@ -98,7 +95,6 @@ jobs:
       run: cargo deny check advisories
 
   coverage:
-    if: github.event_name == 'push'
     name: Code Coverage
     runs-on: ubuntu-latest
     steps:

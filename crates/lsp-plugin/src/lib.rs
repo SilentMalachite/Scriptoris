@@ -174,10 +174,7 @@ impl LspPlugin {
         let mut clients = self.clients.write().await;
         if let Some(client) = clients.remove(server_name) {
             // Shutdown with timeout to prevent hanging
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                client.shutdown()
-            ).await {
+            match tokio::time::timeout(std::time::Duration::from_secs(5), client.shutdown()).await {
                 Ok(result) => result?,
                 Err(_) => {
                     log::warn!("LSP server {} shutdown timeout", server_name);
@@ -359,6 +356,63 @@ impl LspPlugin {
 
     pub async fn handle_diagnostics(&self, uri: Url, diagnostics: Vec<Diagnostic>) {
         self.diagnostics.write().await.insert(uri, diagnostics);
+    }
+
+    pub async fn format_document(
+        &self,
+        path: &PathBuf,
+        mut options: FormattingOptions,
+    ) -> Result<Option<String>> {
+        let server_name = match self.current_server.read().await.clone() {
+            Some(name) => name,
+            None => return Ok(None),
+        };
+
+        let client = {
+            let clients = self.clients.read().await;
+            clients.get(&server_name).cloned()
+        };
+
+        let Some(client) = client else {
+            return Ok(None);
+        };
+
+        let uri = {
+            let documents = self.documents.read().await;
+            if let Some(document) = documents.get(path) {
+                document.uri.clone()
+            } else {
+                return Ok(None);
+            }
+        };
+
+        // Ensure minimal sensible defaults for formatter regardless of caller input
+        if options.tab_size == 0 {
+            options.tab_size = 4;
+        }
+
+        let params = DocumentFormattingParams {
+            text_document: TextDocumentIdentifier { uri: uri.clone() },
+            options,
+            work_done_progress_params: WorkDoneProgressParams::default(),
+        };
+
+        let edits = client.formatting(params).await?;
+
+        if let Some(edits) = edits {
+            let mut documents = self.documents.write().await;
+            if let Some(document) = documents.get_mut(path) {
+                let new_content = document.apply_text_edits(edits);
+                return Ok(Some(new_content));
+            } else {
+                log::warn!(
+                    "Document disappeared before formatting could be applied: {}",
+                    path.display()
+                );
+            }
+        }
+
+        Ok(None)
     }
 
     fn get_client_capabilities(&self) -> ClientCapabilities {

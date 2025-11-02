@@ -38,9 +38,22 @@ impl ScriptorisLspPlugin {
         // Start language servers based on config
         let config = self.lsp.config.read().await;
         if config.auto_start {
-            for name in config.servers.keys() {
-                // Try to start each configured server
-                let _ = self.lsp.start_server(name).await;
+            let server_names: Vec<String> = config.servers.keys().cloned().collect();
+            drop(config);
+
+            let mut errors = Vec::new();
+            for name in server_names {
+                if let Err(e) = self.lsp.start_server(&name).await {
+                    log::error!("Failed to start LSP server {}: {}", name, e);
+                    errors.push(format!("{}: {}", name, e));
+                }
+            }
+
+            if !errors.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "LSPサーバーの起動に失敗しました: {}",
+                    errors.join("; ")
+                ));
             }
         }
 
@@ -167,8 +180,24 @@ impl ScriptorisLspPlugin {
     }
 
     pub async fn format_current_buffer(&self) -> Result<Option<String>> {
-        // TODO: Implement formatting
-        Ok(None)
+        let path = {
+            let guard = self.current_file.read().await;
+            guard.clone()
+        };
+
+        let Some(path) = path else {
+            return Ok(None);
+        };
+
+        let mut options = FormattingOptions::default();
+        if options.tab_size == 0 {
+            options.tab_size = 4;
+        }
+        options.insert_spaces = true;
+        options.trim_trailing_whitespace.get_or_insert(true);
+        options.insert_final_newline.get_or_insert(true);
+
+        self.lsp.format_document(&path, options).await
     }
 }
 

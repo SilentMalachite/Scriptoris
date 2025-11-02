@@ -72,10 +72,36 @@ impl SessionManager {
     ) -> Result<String> {
         self.ensure_session_dir().await?;
 
+        let filename = format!("{}.json", name);
+        let filepath = self.session_dir.join(&filename);
+
+        let existing_created_at = if try_exists(&filepath).await? {
+            match fs::read_to_string(&filepath).await {
+                Ok(json) => match serde_json::from_str::<SessionData>(&json) {
+                    Ok(session) => Some(session.created_at),
+                    Err(e) => {
+                        log::warn!("Failed to parse existing session '{}': {}", name, e);
+                        None
+                    }
+                },
+                Err(e) => {
+                    log::warn!(
+                        "Failed to read existing session file '{}': {}",
+                        filepath.display(),
+                        e
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let now = Utc::now();
         let session_data = SessionData {
             name: name.to_string(),
-            created_at: Utc::now(),
-            modified_at: Utc::now(),
+            created_at: existing_created_at.unwrap_or(now),
+            modified_at: now,
             current_file: file_manager.get_current_path().cloned(),
             cursor_line: editor.cursor_position().0,
             cursor_col: editor.cursor_position().1,
@@ -89,9 +115,6 @@ impl SessionManager {
             },
             readonly: file_manager.is_readonly(),
         };
-
-        let filename = format!("{}.json", name);
-        let filepath = self.session_dir.join(filename);
         let json = serde_json::to_string_pretty(&session_data)?;
         fs::write(&filepath, json).await?;
 

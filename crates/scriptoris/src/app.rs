@@ -37,7 +37,7 @@ pub struct App {
     pub buffer_manager: BufferManager,
     pub window_manager: WindowManager,
     highlighter_cache: Option<Highlighter>, // Cache highlighter
-    last_key: Option<char>, // For handling multi-key commands like dd
+    last_key: Option<char>,                 // For handling multi-key commands like dd
     // Macro recording
     macro_recording: bool,
     macro_register: Option<char>,
@@ -379,9 +379,7 @@ impl App {
             .unwrap_or(true);
 
         if needs_refresh {
-            self.highlighter_cache = Some(Highlighter::new(
-                &self.config.theme.syntax_theme,
-            ));
+            self.highlighter_cache = Some(Highlighter::new(&self.config.theme.syntax_theme));
         }
 
         self.highlighter_cache
@@ -919,12 +917,7 @@ impl App {
 
     #[cfg(feature = "lsp")]
     #[allow(dead_code)]
-    pub async fn notify_lsp_document_changed(
-        &self,
-        path: &Path,
-        content: &str,
-        version: i32,
-    ) {
+    pub async fn notify_lsp_document_changed(&self, path: &Path, content: &str, version: i32) {
         if let Some(ref lsp_plugin) = self.lsp_plugin {
             if let Err(e) = lsp_plugin
                 .update_document(path.to_path_buf(), content.to_string(), version)

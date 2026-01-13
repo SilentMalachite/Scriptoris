@@ -15,7 +15,9 @@ use crate::app::{App, Mode};
 use anyhow::Result;
 use crossterm::{
     cursor,
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -205,8 +207,7 @@ async fn handle_key_event_safe(key: KeyEvent, app: &mut App) -> Result<()> {
             app.quit();
         }
         return Ok(());
-    } else if key.code == KeyCode::Char('x') && key.modifiers.contains(KeyModifiers::CONTROL)
-    {
+    } else if key.code == KeyCode::Char('x') && key.modifiers.contains(KeyModifiers::CONTROL) {
         log::info!("Nano-style exit requested via Ctrl+X");
         // Ctrl+X for nano-like users - redirect to vim :q
         if app.is_modified() {

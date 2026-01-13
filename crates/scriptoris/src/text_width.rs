@@ -88,7 +88,7 @@ impl TextWidthCalculator {
                         2
                     } else {
                         // シングル絵文字の場合、unicode_widthに従う
-                        grapheme.chars().next().unwrap().width().unwrap_or(1)
+                        grapheme.chars().next().and_then(|c| c.width()).unwrap_or(1)
                     }
                 }
             };

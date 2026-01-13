@@ -66,16 +66,16 @@ impl ScriptorisLspPlugin {
         // Detect language from file extension
         let language_id = match path.extension().and_then(|s| s.to_str()) {
             Some("rs") => "rust",
-            Some("ts") | Some("tsx") => "typescript",
-            Some("js") | Some("jsx") => "javascript",
+            Some("ts" | "tsx") => "typescript",
+            Some("js" | "jsx") => "javascript",
             Some("py") => "python",
             Some("go") => "go",
             Some("c") => "c",
-            Some("cpp") | Some("cc") | Some("cxx") => "cpp",
+            Some("cpp" | "cc" | "cxx") => "cpp",
             Some("java") => "java",
             Some("md") => "markdown",
             Some("json") => "json",
-            Some("yaml") | Some("yml") => "yaml",
+            Some("yaml" | "yml") => "yaml",
             Some("toml") => "toml",
             _ => "plaintext",
         }

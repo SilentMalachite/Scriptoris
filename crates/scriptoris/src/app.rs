@@ -382,9 +382,10 @@ impl App {
             self.highlighter_cache = Some(Highlighter::new(&self.config.theme.syntax_theme));
         }
 
-        self.highlighter_cache
-            .as_ref()
-            .expect("Highlighter cache should be initialised")
+        // SAFETY: highlighter_cache is guaranteed to be Some after the refresh check above
+        self.highlighter_cache.as_ref().unwrap_or_else(|| {
+            unreachable!("Highlighter cache should be initialized in the refresh block above")
+        })
     }
 
     // Public getters for UI and main.rs

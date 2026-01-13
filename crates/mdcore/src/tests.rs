@@ -4,7 +4,7 @@ mod unit_tests {
 
     #[test]
     fn test_sanitize_html_removes_scripts() {
-        let html = r#"<p>Hello</p><script>alert('XSS')</script><p>World</p>"#;
+        let html = r"<p>Hello</p><script>alert('XSS')</script><p>World</p>";
         let sanitized = sanitize::sanitize_html(html);
         assert!(!sanitized.contains("<script"));
         assert!(!sanitized.contains("alert"));
@@ -37,11 +37,11 @@ mod unit_tests {
 
     #[test]
     fn test_markdown_table_rendering() {
-        let markdown = r#"
+        let markdown = r"
 | Header 1 | Header 2 |
 |----------|----------|
 | Cell 1   | Cell 2   |
-"#;
+";
         let html = markdown::to_html(markdown);
         assert!(html.contains("<table>"));
         assert!(html.contains("<th>"));
@@ -50,7 +50,7 @@ mod unit_tests {
 
     #[test]
     fn test_patch_math_blocks() {
-        let html = r#"<p>Inline $x^2$ and display $$y = mx + b$$</p>"#;
+        let html = r"<p>Inline $x^2$ and display $$y = mx + b$$</p>";
         let patched = markdown::patch_math_blocks(html);
         assert!(patched.contains(r#"class="math-inline""#));
         assert!(patched.contains(r#"class="math-block""#));

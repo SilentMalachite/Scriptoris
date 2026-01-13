@@ -3,11 +3,14 @@
 
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::path::{Path, PathBuf};
 
 use crate::command_processor::{BufferCommand, CommandAction, CommandProcessor, WindowCommand};
 use crate::config::Config;
 use crate::editor::Editor;
 use crate::file_manager::FileManager;
+use crate::highlight::Highlighter;
+use crate::text_width::{EmojiWidth, TextWidthCalculator};
 use crate::ui_state::UIState;
 
 // LSP integration
@@ -33,7 +36,7 @@ pub struct App {
     pub command_processor: CommandProcessor,
     pub buffer_manager: BufferManager,
     pub window_manager: WindowManager,
-    highlighter_cache: Option<crate::highlight::Highlighter>, // Cache highlighter
+    highlighter_cache: Option<Highlighter>, // Cache highlighter
     last_key: Option<char>, // For handling multi-key commands like dd
     // Macro recording
     macro_recording: bool,
@@ -41,7 +44,7 @@ pub struct App {
     macro_keys: Vec<KeyEvent>,
     macro_registers: std::collections::HashMap<char, Vec<KeyEvent>>,
     // Cross-platform text width calculator for accurate cursor positioning
-    pub text_calculator: crate::text_width::TextWidthCalculator,
+    pub text_calculator: TextWidthCalculator,
     // LSP integration for enhanced syntax highlighting and code intelligence
     #[cfg(feature = "lsp")]
     lsp_plugin: Option<LspPlugin>,
@@ -51,7 +54,7 @@ pub struct App {
 pub struct Buffer {
     pub id: usize,
     pub content: Editor,
-    pub file_path: Option<std::path::PathBuf>,
+    pub file_path: Option<PathBuf>,
     pub readonly: bool,
 }
 
@@ -186,7 +189,7 @@ pub trait Plugin: Send + Sync {
     fn on_load(&mut self, app: &mut App) -> Result<()>;
     fn on_key(&mut self, app: &mut App, key: KeyEvent) -> Result<bool>;
     fn on_command(&mut self, app: &mut App, command: &str) -> Result<Option<String>>;
-    fn on_save(&mut self, app: &mut App, path: &std::path::Path) -> Result<()>;
+    fn on_save(&mut self, app: &mut App, path: &Path) -> Result<()>;
 }
 
 #[allow(dead_code)]
@@ -226,7 +229,7 @@ impl PluginManager {
         Ok(None)
     }
 
-    pub fn handle_save(&mut self, app: &mut App, path: &std::path::Path) -> Result<()> {
+    pub fn handle_save(&mut self, app: &mut App, path: &Path) -> Result<()> {
         for plugin in &mut self.plugins {
             plugin.on_save(app, path)?;
         }
@@ -265,7 +268,7 @@ impl WindowManager {
         &mut self.panes
     }
 
-    pub fn split_horizontal(&mut self, buffer_id: usize) {
+    fn split(&mut self, buffer_id: usize, kind: WindowSplitKind) {
         if self.panes.len() < 2 {
             self.panes.push(WindowPane {
                 id: self.next_window_id,
@@ -279,24 +282,15 @@ impl WindowManager {
         {
             pane.buffer_id = buffer_id;
         }
-        self.split = WindowSplitKind::Horizontal;
+        self.split = kind;
+    }
+
+    pub fn split_horizontal(&mut self, buffer_id: usize) {
+        self.split(buffer_id, WindowSplitKind::Horizontal);
     }
 
     pub fn split_vertical(&mut self, buffer_id: usize) {
-        if self.panes.len() < 2 {
-            self.panes.push(WindowPane {
-                id: self.next_window_id,
-                buffer_id,
-            });
-            self.next_window_id += 1;
-        } else if let Some(pane) = self
-            .panes
-            .iter_mut()
-            .find(|pane| pane.id != self.current_window_id)
-        {
-            pane.buffer_id = buffer_id;
-        }
-        self.split = WindowSplitKind::Vertical;
+        self.split(buffer_id, WindowSplitKind::Vertical);
     }
 
     pub fn set_buffer_for_current(&mut self, buffer_id: usize) {
@@ -357,9 +351,9 @@ impl App {
             macro_keys: Vec::new(),
             macro_registers: std::collections::HashMap::new(),
             // Initialize text calculator for cross-platform compatibility
-            text_calculator: crate::text_width::TextWidthCalculator::new()
+            text_calculator: TextWidthCalculator::new()
                 .east_asian_aware(true)
-                .emoji_width(crate::text_width::EmojiWidth::Standard),
+                .emoji_width(EmojiWidth::Standard),
             #[cfg(feature = "lsp")]
             lsp_plugin,
         })
@@ -377,7 +371,7 @@ impl App {
         &mut self.buffer_manager.get_current_mut().content
     }
 
-    pub fn get_highlighter(&mut self) -> &crate::highlight::Highlighter {
+    pub fn get_highlighter(&mut self) -> &Highlighter {
         let needs_refresh = self
             .highlighter_cache
             .as_ref()
@@ -385,7 +379,7 @@ impl App {
             .unwrap_or(true);
 
         if needs_refresh {
-            self.highlighter_cache = Some(crate::highlight::Highlighter::new(
+            self.highlighter_cache = Some(Highlighter::new(
                 &self.config.theme.syntax_theme,
             ));
         }
@@ -405,7 +399,7 @@ impl App {
         self.ui_state.is_help_shown()
     }
 
-    pub fn file_path(&self) -> Option<&std::path::PathBuf> {
+    pub fn file_path(&self) -> Option<&PathBuf> {
         self.file_manager.get_current_path()
     }
 
@@ -911,7 +905,7 @@ impl App {
 
     // LSP integration methods
     #[cfg(feature = "lsp")]
-    pub async fn notify_lsp_document_opened(&self, path: &std::path::Path, content: &str) {
+    pub async fn notify_lsp_document_opened(&self, path: &Path, content: &str) {
         if let Some(ref lsp_plugin) = self.lsp_plugin {
             let language_id = self.detect_language_id(path);
             if let Err(e) = lsp_plugin
@@ -927,7 +921,7 @@ impl App {
     #[allow(dead_code)]
     pub async fn notify_lsp_document_changed(
         &self,
-        path: &std::path::Path,
+        path: &Path,
         content: &str,
         version: i32,
     ) {
@@ -941,35 +935,30 @@ impl App {
         }
     }
 
-    #[cfg(feature = "lsp")]
     #[allow(dead_code)]
     pub async fn get_lsp_completions(
         &self,
-        path: &std::path::Path,
+        path: &Path,
         line: u32,
         character: u32,
     ) -> Vec<lsp_types::CompletionItem> {
+        #[cfg(feature = "lsp")]
         if let Some(ref lsp_plugin) = self.lsp_plugin {
-            lsp_plugin
+            return lsp_plugin
                 .get_completions(path.to_path_buf(), line, character)
                 .await
-                .unwrap_or_default()
-        } else {
-            vec![]
+                .unwrap_or_default();
         }
-    }
 
-    #[cfg(not(feature = "lsp"))]
-    pub async fn get_lsp_completions(
-        &self,
-        _path: &std::path::Path,
-        _line: u32,
-        _character: u32,
-    ) -> Vec<()> {
+        #[cfg(not(feature = "lsp"))]
+        {
+            let _ = (path, line, character);
+        }
+
         vec![]
     }
 
-    fn detect_language_id(&self, path: &std::path::Path) -> String {
+    fn detect_language_id(&self, path: &Path) -> String {
         match path.extension().and_then(|ext| ext.to_str()) {
             Some("rs") => "rust".to_string(),
             Some("md") => "markdown".to_string(),
@@ -990,19 +979,20 @@ impl App {
         }
     }
 
+    fn handle_buffer_switch(&mut self, message: &str) -> Option<(UiMessageKind, String)> {
+        let active_id = self.buffer_manager.current_buffer_id();
+        self.window_manager.set_buffer_for_current(active_id);
+        self.sync_file_manager_from_buffer();
+        Some((UiMessageKind::Info, message.to_string()))
+    }
+
     fn apply_command_action(&mut self, action: CommandAction) -> Option<(UiMessageKind, String)> {
         match action {
             CommandAction::None => None,
             CommandAction::Buffer(buffer_command) => match buffer_command {
                 BufferCommand::Next => {
                     if self.buffer_manager.next_buffer().is_some() {
-                        let active_id = self.buffer_manager.current_buffer_id();
-                        self.window_manager.set_buffer_for_current(active_id);
-                        self.sync_file_manager_from_buffer();
-                        Some((
-                            UiMessageKind::Info,
-                            "次のバッファに切り替えました".to_string(),
-                        ))
+                        self.handle_buffer_switch("次のバッファに切り替えました")
                     } else {
                         Some((
                             UiMessageKind::Warning,
@@ -1012,13 +1002,7 @@ impl App {
                 }
                 BufferCommand::Previous => {
                     if self.buffer_manager.prev_buffer().is_some() {
-                        let active_id = self.buffer_manager.current_buffer_id();
-                        self.window_manager.set_buffer_for_current(active_id);
-                        self.sync_file_manager_from_buffer();
-                        Some((
-                            UiMessageKind::Info,
-                            "前のバッファに切り替えました".to_string(),
-                        ))
+                        self.handle_buffer_switch("前のバッファに切り替えました")
                     } else {
                         Some((
                             UiMessageKind::Warning,

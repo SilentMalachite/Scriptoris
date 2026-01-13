@@ -192,27 +192,35 @@ mod tests {
         LOCK.get_or_init(|| Mutex::new(()))
     }
 
-    fn set_data_dir(path: &std::path::Path) -> Option<String> {
-        let previous = std::env::var("SCRIPTORIS_DATA_DIR").ok();
-        std::env::set_var("SCRIPTORIS_DATA_DIR", path);
-        previous
+    struct EnvGuard {
+        previous: Option<String>,
     }
 
-    fn restore_data_dir(previous: Option<String>) {
-        if let Some(value) = previous {
-            std::env::set_var("SCRIPTORIS_DATA_DIR", value);
-        } else {
-            std::env::remove_var("SCRIPTORIS_DATA_DIR");
+    impl EnvGuard {
+        fn new(path: &std::path::Path) -> Self {
+            let previous = std::env::var("SCRIPTORIS_DATA_DIR").ok();
+            std::env::set_var("SCRIPTORIS_DATA_DIR", path);
+            Self { previous }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            if let Some(ref value) = self.previous {
+                std::env::set_var("SCRIPTORIS_DATA_DIR", value);
+            } else {
+                std::env::remove_var("SCRIPTORIS_DATA_DIR");
+            }
         }
     }
 
     #[tokio::test]
     async fn test_save_load_and_delete_session() {
-        let previous_env = {
+        let _data_dir_guard = {
             let _guard = session_test_lock().lock().unwrap();
             let data_dir = TempDir::new().unwrap();
-            set_data_dir(data_dir.path())
-        }; // release lock before await
+            EnvGuard::new(data_dir.path())
+        }; // lock is released, but EnvGuard persists
 
         let manager = SessionManager::new().expect("session manager should initialize");
 
@@ -248,22 +256,18 @@ mod tests {
             .await
             .expect("session should delete");
         assert!(delete_message.contains("削除"));
-
-        restore_data_dir(previous_env);
     }
 
     #[tokio::test]
     async fn test_load_missing_session_returns_error() {
-        let previous_env = {
+        let _data_dir_guard = {
             let _guard = session_test_lock().lock().unwrap();
             let data_dir = TempDir::new().unwrap();
-            set_data_dir(data_dir.path())
-        }; // release lock before await
+            EnvGuard::new(data_dir.path())
+        }; // lock is released, but EnvGuard persists
 
         let manager = SessionManager::new().expect("session manager should initialize");
         let error = manager.load_session("missing").await.unwrap_err();
         assert!(error.to_string().contains("見つかりません"));
-
-        restore_data_dir(previous_env);
     }
 }

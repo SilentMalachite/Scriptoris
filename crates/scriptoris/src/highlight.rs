@@ -41,7 +41,7 @@ impl Highlighter {
         &self.theme_name
     }
 
-    pub fn find_syntax_for_filename<'a>(&'a self, filename: &str) -> &'a SyntaxReference {
+    pub fn find_syntax_for_filename(&self, filename: &str) -> &SyntaxReference {
         let lower = filename.to_lowercase();
         if lower.ends_with(".md") || lower.ends_with(".markdown") {
             if let Some(md) = self.syntax_set.find_syntax_by_name("Markdown") {
@@ -51,7 +51,7 @@ impl Highlighter {
         self.syntax_set
             .find_syntax_for_file(filename)
             .ok()
-            .and_then(|o| o)
+            .flatten()
             .unwrap_or_else(|| {
                 let ext = filename.rsplit('.').next().unwrap_or("");
                 self.syntax_set

@@ -99,7 +99,7 @@ impl Config {
                         }
 
                         // Try to deserialize
-                        match serde_json::from_str::<Config>(&content) {
+                        match serde_json::from_str::<Self>(&content) {
                             Ok(mut config) => {
                                 // Validate config values
                                 config.validate()?;

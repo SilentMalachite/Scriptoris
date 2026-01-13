@@ -1,3 +1,5 @@
+use std::panic::{self, AssertUnwindSafe};
+
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -14,7 +16,7 @@ impl EnhancedUI {
     pub fn draw(f: &mut Frame, app: &mut App) {
         // Enhanced UI draw with comprehensive error handling
         let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Self::draw_internal(f, app)));
+            panic::catch_unwind(AssertUnwindSafe(|| Self::draw_internal(f, app)));
 
         if let Err(panic_info) = result {
             log::error!("Enhanced UI panic: {:?}", panic_info);
@@ -29,7 +31,7 @@ impl EnhancedUI {
             return;
         }
 
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let result = panic::catch_unwind(AssertUnwindSafe(|| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -81,7 +83,7 @@ impl EnhancedUI {
     }
 
     fn draw_enhanced_title_bar(f: &mut Frame, app: &App, area: Rect) {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let result = panic::catch_unwind(AssertUnwindSafe(|| {
             let file_info = match app.file_path() {
                 Some(path) => {
                     let filename = path
@@ -247,7 +249,7 @@ impl EnhancedUI {
     }
 
     fn draw_enhanced_status_bar(f: &mut Frame, app: &App, area: Rect) {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let result = panic::catch_unwind(AssertUnwindSafe(|| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([

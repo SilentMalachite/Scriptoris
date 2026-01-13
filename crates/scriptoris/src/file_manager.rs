@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use tokio::fs;
 
@@ -83,13 +84,13 @@ impl FileManager {
             }
             Err(e) => {
                 let error_msg = match e.kind() {
-                    std::io::ErrorKind::PermissionDenied => {
+                    ErrorKind::PermissionDenied => {
                         format!("ファイルへのアクセス権限がありません: {}", path.display())
                     }
-                    std::io::ErrorKind::NotFound => {
+                    ErrorKind::NotFound => {
                         format!("ファイルが見つかりません: {}", path.display())
                     }
-                    std::io::ErrorKind::InvalidData => {
+                    ErrorKind::InvalidData => {
                         format!(
                             "ファイルのエンコーディングが無効です (UTF-8ではありません): {}",
                             path.display()

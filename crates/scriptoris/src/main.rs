@@ -11,9 +11,11 @@ mod text_width;
 mod ui;
 mod ui_state;
 
+use crate::app::{App, Mode};
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    cursor,
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -22,21 +24,22 @@ use ratatui::{
     backend::{Backend, CrosstermBackend},
     Terminal,
 };
-use std::{env, io, time::Duration};
+use std::path::PathBuf;
+use std::{env, io, panic, time::Duration};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logger with debug fallback for development
     let mut logger = env_logger::Builder::from_default_env();
-    if std::env::var_os("RUST_LOG").is_none() {
+    if env::var_os("RUST_LOG").is_none() {
         logger.filter_level(LevelFilter::Info);
         logger.filter_module("scriptoris", LevelFilter::Debug);
     }
     logger.init();
 
     // Setup panic hook to restore terminal
-    let original_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic_info| {
+    let original_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
         let _ = restore_terminal();
         original_hook(panic_info);
     }));
@@ -57,7 +60,7 @@ async fn main() -> Result<()> {
 
     // Parse command line arguments
     let args: Vec<String> = env::args().collect();
-    let mut app = match app::App::new().await {
+    let mut app = match App::new().await {
         Ok(app) => {
             log::info!("Application initialized successfully");
             app
@@ -76,7 +79,7 @@ async fn main() -> Result<()> {
 
     // Load file from command line if provided
     if args.len() > 1 {
-        let file_path = std::path::PathBuf::from(&args[1]);
+        let file_path = PathBuf::from(&args[1]);
 
         // Validate file path arguments
         match app.file_manager.open_file(file_path.clone()).await {
@@ -142,7 +145,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: app::App) -> Result<()> {
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
     // Main application loop with safe error handling
     loop {
         // Draw UI
@@ -189,20 +192,20 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: app::App) -> R
     Ok(())
 }
 
-async fn handle_key_event_safe(key: crossterm::event::KeyEvent, app: &mut app::App) -> Result<()> {
+async fn handle_key_event_safe(key: KeyEvent, app: &mut App) -> Result<()> {
     // Handle Ctrl+C as emergency exit
-    if key.code == KeyCode::Char('c') && key.modifiers.contains(event::KeyModifiers::CONTROL) {
+    if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
         log::info!("Emergency exit requested via Ctrl+C");
         if app.is_modified() {
             // Prompt to save before exiting
             app.ui_state
                 .set_warning_message("Save changes before exit? (y/n/c): ".to_string());
-            app.set_mode(app::Mode::SavePrompt);
+            app.set_mode(Mode::SavePrompt);
         } else {
             app.quit();
         }
         return Ok(());
-    } else if key.code == KeyCode::Char('x') && key.modifiers.contains(event::KeyModifiers::CONTROL)
+    } else if key.code == KeyCode::Char('x') && key.modifiers.contains(KeyModifiers::CONTROL)
     {
         log::info!("Nano-style exit requested via Ctrl+X");
         // Ctrl+X for nano-like users - redirect to vim :q
@@ -226,6 +229,6 @@ fn restore_terminal() -> Result<()> {
     let mut stdout = io::stdout();
     execute!(stdout, LeaveAlternateScreen, DisableMouseCapture)?;
     // Attempt to show cursor, but don't fail if it errors
-    let _ = execute!(stdout, crossterm::cursor::Show);
+    let _ = execute!(stdout, cursor::Show);
     Ok(())
 }

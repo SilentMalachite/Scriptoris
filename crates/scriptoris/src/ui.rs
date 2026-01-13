@@ -1,5 +1,7 @@
 //! 標準 UI レンダラー。`WindowManager` の構成に従ってバッファを描画します。
 
+use std::panic;
+
 use crate::app::{WindowPane, WindowSplitKind};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -19,7 +21,7 @@ fn parse_color(value: &str) -> Option<Color> {
     }
 
     // Use catch_unwind for color parsing safety
-    match std::panic::catch_unwind(|| {
+    match panic::catch_unwind(|| {
         let r = u8::from_str_radix(&hex[0..2], 16);
         let g = u8::from_str_radix(&hex[2..4], 16);
         let b = u8::from_str_radix(&hex[4..6], 16);

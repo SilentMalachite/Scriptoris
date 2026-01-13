@@ -2,6 +2,7 @@
 //! バッファ/ウィンドウ操作は `CommandAction` として呼び出し側に委譲します。
 
 use anyhow::Result;
+use std::panic;
 use std::path::PathBuf;
 
 use crate::config::Config;
@@ -37,7 +38,7 @@ pub struct CommandProcessor {
 
 impl CommandProcessor {
     pub fn new() -> Result<Self> {
-        match std::panic::catch_unwind(|| {
+        match panic::catch_unwind(|| {
             let session_manager = SessionManager::new();
             match session_manager {
                 Ok(sm) => Ok(Self {
@@ -110,8 +111,7 @@ impl CommandProcessor {
         should_quit: &mut bool,
     ) -> Result<String> {
         // Handle search commands (starting with search)
-        if cmd.starts_with("search ") {
-            let query = cmd.strip_prefix("search ").unwrap_or("");
+        if let Some(query) = cmd.strip_prefix("search ") {
             if !query.is_empty() {
                 editor.search(query);
                 return Ok(format!("検索: {}", query));
